@@ -23,7 +23,7 @@ export default function Home() {
           Your degree,<br />mapped out.
         </h1>
         <p className="text-base sm:text-lg mb-12 max-w-xl" style={{ color: ON_DARK_MUTED }}>
-          See the semester plan ahead, check Degree Works, or register to add and drop classes.
+          See the semester plan ahead, check Degree Works, or register courses from your plan and the catalog.
         </p>
 
         <div className="flex flex-wrap gap-4">
@@ -44,12 +44,12 @@ export default function Home() {
             Degree Works
           </Link>
           <Link
-            to="/registration"
+            to="/register-courses"
             className="flex items-center gap-2 px-6 py-3.5 rounded-full text-sm font-semibold transition-colors"
             style={{ background: "transparent", color: "#FFFFFF", border: "1.5px solid rgba(255,255,255,0.55)" }}
           >
             <NotebookPen size={18} />
-            Registration
+            Register courses
           </Link>
         </div>
       </div>

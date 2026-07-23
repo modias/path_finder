@@ -112,6 +112,38 @@ export const PLAN_INPUTS = {
   startingSemester: "Fall 2026",
 };
 
+/** Past terms with grades — shown under Registration → Your schedule */
+export const COURSE_HISTORY = [
+  {
+    term: "Fall 2025",
+    courses: [
+      { code: "DTSC 2301", title: "Modeling and Society A", credits: 3, grade: "A-" },
+      { code: "MATH 2164", title: "Matrices and Linear Algebra", credits: 3, grade: "B+" },
+      { code: "ITSC 2175", title: "Logic and Algorithms", credits: 3, grade: "A" },
+      { code: "ITCS 3153", title: "Introduction to Artificial Intelligence", credits: 3, grade: "B" },
+      { code: "CTCM 2530", title: "Critical Thinking and Communication", credits: 3, grade: "A-" },
+    ],
+  },
+  {
+    term: "Spring 2025",
+    courses: [
+      { code: "DTSC 1302", title: "Data and Society B", credits: 3, grade: "A" },
+      { code: "ITSC 1213", title: "Introduction to Computer Science II", credits: 4, grade: "B+" },
+      { code: "STAT 1222", title: "Introduction to Statistics", credits: 3, grade: "A-" },
+      { code: "WRDS 1103", title: "Writing and Inquiry in Academic Contexts", credits: 3, grade: "A" },
+    ],
+  },
+  {
+    term: "Fall 2024",
+    courses: [
+      { code: "DTSC 1301", title: "Data and Society A", credits: 3, grade: "A" },
+      { code: "MATH 1241", title: "Calculus I", credits: 3, grade: "B+" },
+      { code: "ITCS 4122", title: "Visual Analytics", credits: 3, grade: "A-" },
+      { code: "ITIS 3200", title: "Introduction to Cloud Computing", credits: 3, grade: "B" },
+    ],
+  },
+];
+
 export const SEMESTER_PLAN = [
   {
     term: "Fall 2025",

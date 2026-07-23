@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Sparkles, MessageCircle, Route, ClipboardList } from "lucide-react";
+import { Sparkles, MessageCircle, Route, ClipboardList, NotebookPen } from "lucide-react";
 
 const INK = "#0B2E22";
 const GREEN = "#1F7A54";
@@ -40,8 +40,16 @@ export default function PersonalizedBar({ onOpenChat, onViewRoadmap }) {
           style={{ background: SURFACE, color: INK, border: "1px solid #DCDACD" }}
         >
           <Route size={16} color={GREEN} />
-          View roadmap
+          View plan
         </button>
+        <Link
+          to="/register-courses"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-opacity hover:opacity-90"
+          style={{ background: SURFACE, color: INK, border: "1px solid #DCDACD" }}
+        >
+          <NotebookPen size={14} color={GREEN} />
+          Register courses
+        </Link>
         <Link
           to="/degree-works"
           className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-opacity hover:opacity-90"

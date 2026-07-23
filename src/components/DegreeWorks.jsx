@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, BookOpen, Check, ChevronUp, Circle, ClipboardList, GraduationCap, Layers, NotebookPen, Route,
+  ArrowLeft, BookOpen, Check, ChevronUp, Circle, ClipboardList, GraduationCap, Home, Layers, NotebookPen, Route,
 } from "lucide-react";
 import {
   DEGREE_TOTAL_CREDITS,
@@ -369,6 +369,7 @@ function CourseTable({ courses }) {
 }
 
 export default function DegreeWorks() {
+  const navigate = useNavigate();
   const completedCredits = estimateCompletedCredits();
   const creditsApplied = completedCredits;
   const majorCourses = getMajorCourses();
@@ -393,13 +394,19 @@ export default function DegreeWorks() {
               School of Data Science
             </span>
           </Link>
-          <Link
-            to="/"
-            className="flex items-center gap-2 text-sm"
-            style={{ color: "#FFFFFF" }}
-          >
-            <ArrowLeft size={16} /> Home
-          </Link>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-2 text-sm hover:opacity-90 transition-opacity"
+              style={{ color: "#FFFFFF" }}
+            >
+              <ArrowLeft size={16} /> Back
+            </button>
+            <Link to="/" className="flex items-center gap-2 text-sm" style={{ color: "#FFFFFF" }}>
+              <Home size={16} /> Home
+            </Link>
+          </div>
         </div>
 
         <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>
@@ -429,11 +436,11 @@ export default function DegreeWorks() {
                 <Route size={14} /> See the path ahead
               </Link>
               <Link
-                to="/registration"
+                to="/register-courses"
                 className="flex items-center gap-2 text-xs px-4 py-2 rounded-full font-semibold"
                 style={{ background: GREEN, color: "#FFFFFF" }}
               >
-                <NotebookPen size={14} /> Registration
+                <NotebookPen size={14} /> Register courses
               </Link>
             </div>
           </div>
