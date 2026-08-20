@@ -5,6 +5,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   STAGES, ELECTIVES, SEMESTER_PLAN, REMAINING_REQUIREMENTS, CAREERS, TOTAL_CREDITS,
 } from "../src/data/curriculum.js";
+import { recommendCourses } from "./recommendCourses.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -58,6 +59,12 @@ function formatStudentContext(context = {}) {
     if (values.length) lines.push(`Student values: ${values.join(", ")}`);
     if (strengths.length) lines.push(`Student strengths: ${strengths.join(", ")}`);
   }
+  if (context.registerTerm) {
+    lines.push(`Planning to register: ${context.registerTerm}`);
+  }
+  if (context.creditLoad) {
+    lines.push(`Target credit load: ${context.creditLoad}`);
+  }
   if (context.note?.trim()) {
     lines.push(`Student reflection note: ${context.note.trim()}`);
   }
@@ -104,6 +111,33 @@ app.post("/api/chat", async (req, res) => {
     console.error("Gemini error:", err);
     res.status(500).json({
       error: "Failed to get a response. Please try again.",
+      detail: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
+  }
+});
+
+app.post("/api/recommend-courses", async (req, res) => {
+  if (!genAI) {
+    return res.status(503).json({
+      error: "Gemini API key not configured. Add GEMINI_API_KEY to a .env file in the project root.",
+    });
+  }
+
+  const { answers = {} } = req.body;
+  if (!answers.registerTerm?.trim()) {
+    return res.status(400).json({ error: "Registration term is required." });
+  }
+  if (!answers.creditLoad?.trim()) {
+    return res.status(400).json({ error: "Credit load is required." });
+  }
+
+  try {
+    const result = await recommendCourses(genAI, { answers });
+    res.json(result);
+  } catch (err) {
+    console.error("Recommend courses error:", err);
+    res.status(500).json({
+      error: "Failed to generate course recommendations. Please try again.",
       detail: process.env.NODE_ENV === "development" ? err.message : undefined,
     });
   }

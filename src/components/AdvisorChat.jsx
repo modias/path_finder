@@ -63,6 +63,9 @@ export default function AdvisorChat({ isOpen, onOpenChange, context, showFab = t
             selections: serializeSelections(context.selections),
             note: context.note,
             careerTarget: context.careerTarget,
+            registerTerm: context.registerTerm,
+            creditLoad: context.creditLoad,
+            answers: context.reflectAnswers,
           },
         }),
       });

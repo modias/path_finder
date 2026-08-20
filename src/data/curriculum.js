@@ -112,6 +112,16 @@ export const PLAN_INPUTS = {
   startingSemester: "Fall 2026",
 };
 
+/** Upcoming registration terms for Reflect-step chips (from NEXT_SEMESTERS). */
+export const REFLECT_TERM_OPTIONS = NEXT_SEMESTERS.map((s) => s.term);
+
+/** Credit-load chips — store the full label string as the selected value. */
+export const REFLECT_CREDIT_LOAD_OPTIONS = [
+  "12 (light)",
+  `${PLAN_INPUTS.preferredLoad} (standard)`,
+  "18 (heavy)",
+];
+
 /** Past terms with grades — shown under Registration → Your schedule */
 export const COURSE_HISTORY = [
   {

@@ -1,0 +1,69 @@
+---
+description: Enforces DS Pathway course prerequisite/corequisite rules and the eligibility engine whenever prerequisite data, the eligibility engine, the course advisor, or course recommendation code is touched.
+globs:
+  - "src/data/prerequisites.js"
+  - "src/lib/eligibility*"
+  - "src/lib/studentRecord*"
+  - "src/data/advisorQuestions.js"
+  - "src/components/CourseAdvisor*"
+  - "**/api/recommend-courses*"
+  - "**/api/chat*"
+alwaysApply: false
+---
+
+# Course prerequisite rules — DS Pathway
+
+This project models UNC Charlotte B.S. Data Science course prerequisites/corequisites
+in `src/data/prerequisites.js` and enforces them in `src/lib/eligibility.js`. These
+rules exist to prevent the app from ever recommending or allowing registration for
+a course a student isn't actually eligible for.
+
+## Source of truth
+
+- `src/lib/eligibility.js` is the ONLY place eligibility is decided. Nothing else —
+  not a prompt to an LLM, not inline logic in a component, not a one-off check in
+  the registration flow — may independently decide whether a student can take a
+  course. If new code needs an eligibility check, import and call
+  `checkEligibility` / `getEligibleCourses` from that file. Do not reimplement the
+  logic elsewhere.
+- `src/data/prerequisites.js` is the ONLY place prerequisite/corequisite data lives.
+  Every entry must carry a source comment: either a `catalog.charlotte.edu`
+  `preview_course_nopop.php` URL (authoritative, per-course) or another named
+  official UNC Charlotte source if the catalog page couldn't be found. Entries
+  without a verified source must be written as an empty `{ prereqs: [], coreqs: [] }`
+  with a `// TODO: verify` comment — never guess or infer a plausible-sounding rule.
+
+## When adding or editing a course's rule
+
+1. Look up the real prerequisite/corequisite text at catalog.charlotte.edu
+   (search "`<SUBJECT> <NUMBER>` UNC Charlotte catalog", then use the
+   `preview_course_nopop.php?catoid=...&coid=...` page for that course).
+2. Encode it using the existing `Rule` shape: `{ all: [...] }` for "all of these
+   required" and `{ oneOf: [...] }` for "any one of these satisfies it".
+3. Cite the exact URL in a comment next to the entry.
+4. If a prerequisite is a placement level or test score rather than a course code
+   (e.g. STAT 1222's MATH placement requirement), do NOT encode it as a `Rule` —
+   leave a comment explaining it's a placement gate and surface it as a static UI
+   note instead, since this engine only models course-completion prerequisites.
+5. Don't silently drop a course's rule to "no prerequisite" just because you
+   couldn't find one — mark it `TODO: verify` instead so it's visibly unverified.
+
+## When Gemini/AI is involved in course recommendations
+
+- Any AI call (advisor chat, course recommender, etc.) must only ever be given
+  courses that already passed `getEligibleCourses(...)`. Never hand the model the
+  full catalog and ask it to reason about eligibility itself.
+- Treat the model's output as untrusted: after it returns recommended course
+  codes, filter them again against the eligible set server-side before returning
+  anything to the frontend. If a returned code isn't in the eligible set, drop it
+  — don't pass it through.
+
+## Tests
+
+- `src/lib/eligibility.js` must keep its unit tests passing (or gain new ones) for
+  any change to rule-checking logic: no-prereq courses always eligible, missing
+  prereqs blocking eligibility, `oneOf` rules satisfied by any single listed
+  course, and coreqs satisfiable by either `completed` or `inProgress`.
+- Any change to `prerequisites.js` that alters an existing course's rule should be
+  called out explicitly in the PR/commit description, since it changes what
+  students are told they can register for.

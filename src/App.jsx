@@ -3,15 +3,18 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Heart, Compass, Sparkles, Wrench, ArrowRight, ArrowLeft, Check,
   BarChart3, Database, Cpu, LineChart, ShieldCheck, Users, Star, ChevronDown,
-  Home, ClipboardList, NotebookPen,
+  Home, ClipboardList, NotebookPen, Calendar, Gauge,
 } from "lucide-react";
 import AdvisorChat from "./components/AdvisorChat";
 import PersonalizedBar from "./components/PersonalizedBar";
 import CatalogBrowser from "./components/CatalogBrowser";
 import PersonalPlanPanel from "./components/PersonalPlanPanel";
+import CourseAdvisor from "./components/CourseAdvisor";
 import {
   STAGES, ELECTIVES,
   CAREERS as CAREER_DATA,
+  REFLECT_TERM_OPTIONS,
+  REFLECT_CREDIT_LOAD_OPTIONS,
 } from "./data/curriculum";
 
 const PAGE_BG = "#00543C";
@@ -51,6 +54,45 @@ const REFLECTION_PROMPTS = [
   "What attracts you to data science, and what do you picture yourself doing with it?",
 ];
 
+const REFLECT_SINGLE_GROUPS = [
+  {
+    key: "registerTerm",
+    icon: Calendar,
+    prompt: "When are you planning to register?",
+    options: REFLECT_TERM_OPTIONS,
+  },
+  {
+    key: "creditLoad",
+    icon: Gauge,
+    prompt: "How many credit hours are you aiming for?",
+    options: REFLECT_CREDIT_LOAD_OPTIONS,
+  },
+];
+
+function serializeTagSelections(selections) {
+  const pick = (key) => {
+    const val = selections[key];
+    if (val instanceof Set) return [...val];
+    if (Array.isArray(val)) return val;
+    return [];
+  };
+  return {
+    interests: pick("interests"),
+    values: pick("values"),
+    strengths: pick("strengths"),
+  };
+}
+
+function buildReflectAnswers(selections, registerTerm, creditLoad, note, careerTarget) {
+  return {
+    ...serializeTagSelections(selections),
+    registerTerm,
+    creditLoad,
+    note: note?.trim() || "",
+    careerTarget,
+  };
+}
+
 const CAREER_META = [
   { icon: BarChart3, photo: "https://i.pravatar.cc/400?img=47" },
   { icon: Database, photo: "https://i.pravatar.cc/400?img=32" },
@@ -86,7 +128,22 @@ function Stepper({ step, setStep }) {
   );
 }
 
-function ReflectStep({ selections, toggle, note, setNote, onNext }) {
+function ReflectStep({
+  selections,
+  toggle,
+  registerTerm,
+  setRegisterTerm,
+  creditLoad,
+  setCreditLoad,
+  note,
+  setNote,
+  onNext,
+  onGetRecommendations,
+  recommendLoading,
+  recommendError,
+  recommendSummary,
+  recommendations,
+}) {
   return (
     <div>
       <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>Step one</p>
@@ -130,6 +187,41 @@ function ReflectStep({ selections, toggle, note, setNote, onNext }) {
         })}
       </div>
 
+      <div className="grid sm:grid-cols-2 gap-6 mb-10">
+        {REFLECT_SINGLE_GROUPS.map((group) => {
+          const Icon = group.icon;
+          const selected = group.key === "registerTerm" ? registerTerm : creditLoad;
+          return (
+            <div key={group.key}>
+              <div className="flex items-center gap-2 mb-3">
+                <Icon size={18} color={GOLD} />
+                <h3 className="text-sm font-semibold" style={{ color: "#FFFFFF" }}>{group.prompt}</h3>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {group.options.map((opt) => {
+                  const active = selected === opt;
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => (group.key === "registerTerm" ? setRegisterTerm(opt) : setCreditLoad(opt))}
+                      className="text-sm px-3 py-1.5 rounded-full border transition-colors text-left"
+                      style={{
+                        borderColor: active ? GOLD : "rgba(255,255,255,0.4)",
+                        background: active ? GOLD : "transparent",
+                        color: active ? INK : "#FFFFFF",
+                      }}
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       <div className="rounded-2xl p-6 mb-8" style={{ background: SURFACE }}>
         <div className="flex items-center gap-2 mb-4">
           <Sparkles size={18} color={GREEN} />
@@ -152,9 +244,28 @@ function ReflectStep({ selections, toggle, note, setNote, onNext }) {
         />
       </div>
 
-      <button onClick={onNext} className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold" style={{ background: GOLD, color: INK }}>
-        See where this leads <ArrowRight size={16} />
-      </button>
+      <div className="flex flex-wrap items-center gap-3 mb-2">
+        <button
+          type="button"
+          onClick={onGetRecommendations}
+          disabled={recommendLoading || !registerTerm || !creditLoad}
+          className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold disabled:opacity-50"
+          style={{ background: GREEN, color: "#FFFFFF" }}
+        >
+          <Sparkles size={16} />
+          {recommendLoading ? "Finding courses..." : "Get course recommendations"}
+        </button>
+        <button onClick={onNext} className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold" style={{ background: GOLD, color: INK }}>
+          See where this leads <ArrowRight size={16} />
+        </button>
+      </div>
+
+      <CourseAdvisor
+        loading={recommendLoading}
+        error={recommendError}
+        summary={recommendSummary}
+        recommendations={recommendations}
+      />
     </div>
   );
 }
@@ -439,13 +550,20 @@ function CareersStep({ flipped, toggleFlip }) {
 
 export default function App() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
   const [selections, setSelections] = useState({});
+  const [registerTerm, setRegisterTerm] = useState(REFLECT_TERM_OPTIONS[0] || "");
+  const [creditLoad, setCreditLoad] = useState(REFLECT_CREDIT_LOAD_OPTIONS[1] || "");
   const [note, setNote] = useState("");
   const [flipped, setFlipped] = useState(new Set());
   const [chatOpen, setChatOpen] = useState(false);
+  const [recommendLoading, setRecommendLoading] = useState(false);
+  const [recommendError, setRecommendError] = useState(null);
+  const [recommendSummary, setRecommendSummary] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
 
   const careerTarget = inferCareerTarget(selections);
+  const reflectAnswers = buildReflectAnswers(selections, registerTerm, creditLoad, note, careerTarget);
 
   const toggle = (groupKey, opt) => {
     setSelections((prev) => {
@@ -461,6 +579,33 @@ export default function App() {
       next.has(i) ? next.delete(i) : next.add(i);
       return next;
     });
+  };
+
+  const fetchRecommendations = async () => {
+    setRecommendLoading(true);
+    setRecommendError(null);
+    setRecommendSummary(null);
+    setRecommendations([]);
+
+    try {
+      const res = await fetch("/api/recommend-courses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: reflectAnswers }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Something went wrong.");
+
+      setRecommendSummary(data.summary || null);
+      setRecommendations(data.recommendations || []);
+      window.requestAnimationFrame(() => {
+        document.getElementById("course-recommendations")?.scrollIntoView({ behavior: "smooth" });
+      });
+    } catch (err) {
+      setRecommendError(err.message);
+    } finally {
+      setRecommendLoading(false);
+    }
   };
 
   return (
@@ -479,7 +624,7 @@ export default function App() {
         .preferred-load-input { -moz-appearance: textfield; appearance: textfield; }
       `}</style>
 
-      <div className={`mx-auto px-6 py-14 ${step === 1 || step === 2 ? "max-w-7xl" : "max-w-5xl"}`}>
+      <div className={`mx-auto px-6 py-14 ${step === 0 || step === 1 || step === 2 ? "max-w-7xl" : "max-w-5xl"}`}>
         <div className="flex items-center justify-between gap-4 mb-8">
           <Link to="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
             <img
@@ -515,7 +660,24 @@ export default function App() {
           />
         )}
 
-        {step === 0 && <ReflectStep selections={selections} toggle={toggle} note={note} setNote={setNote} onNext={() => setStep(1)} />}
+        {step === 0 && (
+          <ReflectStep
+            selections={selections}
+            toggle={toggle}
+            registerTerm={registerTerm}
+            setRegisterTerm={setRegisterTerm}
+            creditLoad={creditLoad}
+            setCreditLoad={setCreditLoad}
+            note={note}
+            setNote={setNote}
+            onNext={() => setStep(1)}
+            onGetRecommendations={fetchRecommendations}
+            recommendLoading={recommendLoading}
+            recommendError={recommendError}
+            recommendSummary={recommendSummary}
+            recommendations={recommendations}
+          />
+        )}
         {step === 1 && <ExploreStep />}
         {step === 2 && <RoadmapStep selections={selections} onAskAdvisor={() => setChatOpen(true)} />}
         {step === 3 && <CareersStep flipped={flipped} toggleFlip={toggleFlip} />}
@@ -541,8 +703,16 @@ export default function App() {
       <AdvisorChat
         isOpen={chatOpen}
         onOpenChange={setChatOpen}
-        context={{ step, selections, note, careerTarget }}
-        showFab={step < 1}
+        context={{
+          step,
+          selections,
+          note,
+          careerTarget,
+          registerTerm,
+          creditLoad,
+          reflectAnswers,
+        }}
+        showFab={step <= 0}
       />
     </div>
   );
