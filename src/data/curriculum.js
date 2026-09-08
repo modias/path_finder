@@ -53,29 +53,13 @@ export const STAGES = [
   },
 ];
 
-export const ELECTIVES = [
-  {
-    code: "ITCS 3153", name: "Introduction to Artificial Intelligence", hrs: 3, status: "completed",
-    blurb: "Core ideas behind intelligent systems — search, knowledge, and learning.",
-  },
-  {
-    code: "ITCS 4155", name: "Machine Learning", hrs: 3, status: "in_progress",
-    blurb: "Models that learn from data, and how to evaluate whether they actually work.",
-  },
-  {
-    code: "ITCS 4122", name: "Visual Analytics", hrs: 3, status: "completed",
-    blurb: "Turning complex data into visuals you can explore and reason with.",
-  },
-  {
-    code: "ITCS 4123", name: "Data Visualization", hrs: 3, status: "remaining",
-    blurb: "Designing clear charts and dashboards so people can act on the numbers.",
-    recommendIf: { group: "interests", options: ["Art & design", "Storytelling"] },
-  },
-  {
-    code: "ITCS 4180", name: "Mobile Application Development", hrs: 3, status: "remaining",
-    blurb: "Building apps that put data tools in someone's pocket.",
-    recommendIf: { group: "interests", options: ["Building things"] },
-  },
+/** Elective codes tracked on the plan step — metadata comes from courseCatalog.js. */
+export const TRACKED_ELECTIVE_CODES = [
+  "ITCS 3153",
+  "ITCS 3156",
+  "ITCS 4122",
+  "ITCS 4123",
+  "ITIS 4180",
 ];
 
 export const TOTAL_CREDITS = 120;
@@ -86,22 +70,24 @@ export const NEXT_SEMESTERS = [
     term: "Fall 2026",
     recommendedCredits: 15,
     courses: [
+      // 1301 + 1302 already done → 2301/2302 are the next studio pair (mutual coreqs).
       { code: "DTSC 2301", title: "Modeling and Society I", category: "required", credits: 3 },
-      { code: "STAT 2223", title: "Elements of Statistics II", category: "required", credits: 3 },
-      { code: "LBST 2101", title: "Western Cultural History", category: "general_ed", credits: 3 },
-      { code: "ITCS 4123", title: "Data Visualization", category: "elective", credits: 3 },
       { code: "DTSC 2302", title: "Modeling and Society II", category: "required", credits: 3 },
+      { code: "STAT 2223", title: "Elements of Statistics II", category: "required", credits: 3 },
+      { code: "ITCS 3160", title: "Database Design and Implementation", category: "required", credits: 3 },
+      { code: "LBST 2101", title: "Western Cultural History", category: "general_ed", credits: 3 },
     ],
   },
   {
     term: "Spring 2027",
     recommendedCredits: 15,
     courses: [
+      // Unlocks only after Fall's 2301/2302 are treated as completed (progressive plan filter).
       { code: "DTSC 3601", title: "Predictive Analytics I", category: "required", credits: 3 },
-      { code: "ITSC 2214", title: "Data Structures and Algorithms", category: "required", credits: 3 },
-      { code: "LBST 2213", title: "Science, Technology & Society", category: "general_ed", credits: 3 },
-      { code: "ITCS 4180", title: "Mobile Application Development", category: "elective", credits: 3 },
+      { code: "DTSC 3602", title: "Predictive Analytics II", category: "required", credits: 3 },
+      { code: "ITCS 3162", title: "Introduction to Data Mining", category: "required", credits: 3 },
       { code: "STAT 3160", title: "Applied Multivariate Analysis", category: "required", credits: 3 },
+      { code: "LBST 2213", title: "Science, Technology & Society", category: "general_ed", credits: 3 },
     ],
   },
 ];
@@ -125,19 +111,25 @@ export const REFLECT_CREDIT_LOAD_OPTIONS = [
 /** Past terms with grades — shown under Registration → Your schedule */
 export const COURSE_HISTORY = [
   {
+    term: "Spring 2026",
+    courses: [
+      { code: "ITCS 3156", title: "Introduction to Machine Learning", credits: 3, grade: "IP" },
+    ],
+  },
+  {
     term: "Fall 2025",
     courses: [
-      { code: "DTSC 2301", title: "Modeling and Society A", credits: 3, grade: "A-" },
+      { code: "DTSC 1302", title: "Data and Society B", credits: 3, grade: "A" },
       { code: "MATH 2164", title: "Matrices and Linear Algebra", credits: 3, grade: "B+" },
       { code: "ITSC 2175", title: "Logic and Algorithms", credits: 3, grade: "A" },
-      { code: "ITCS 3153", title: "Introduction to Artificial Intelligence", credits: 3, grade: "B" },
+      { code: "ITSC 2214", title: "Data Structures and Algorithms", credits: 4, grade: "B+" },
       { code: "CTCM 2530", title: "Critical Thinking and Communication", credits: 3, grade: "A-" },
     ],
   },
   {
     term: "Spring 2025",
     courses: [
-      { code: "DTSC 1302", title: "Data and Society B", credits: 3, grade: "A" },
+      { code: "DTSC 1301", title: "Data and Society A", credits: 3, grade: "A" },
       { code: "ITSC 1213", title: "Introduction to Computer Science II", credits: 4, grade: "B+" },
       { code: "STAT 1222", title: "Introduction to Statistics", credits: 3, grade: "A-" },
       { code: "WRDS 1103", title: "Writing and Inquiry in Academic Contexts", credits: 3, grade: "A" },
@@ -146,10 +138,10 @@ export const COURSE_HISTORY = [
   {
     term: "Fall 2024",
     courses: [
-      { code: "DTSC 1301", title: "Data and Society A", credits: 3, grade: "A" },
       { code: "MATH 1241", title: "Calculus I", credits: 3, grade: "B+" },
       { code: "ITCS 4122", title: "Visual Analytics", credits: 3, grade: "A-" },
       { code: "ITIS 3200", title: "Introduction to Cloud Computing", credits: 3, grade: "B" },
+      { code: "ITCS 3153", title: "Introduction to Artificial Intelligence", credits: 3, grade: "B" },
     ],
   },
 ];
@@ -171,10 +163,10 @@ export const SEMESTER_PLAN = [
     status: "planned",
     hint: "Add database skills and communication.",
     courses: [
-      { id: "itsc-3160", code: "ITSC 3160", name: "Database Design and Implementation", hrs: 3, done: false },
-      { id: "dtsc-4430", code: "DTSC 4430", name: "Data Storytelling & Visualization", hrs: 3, done: false },
+      { id: "itcs-3160", code: "ITCS 3160", name: "Database Design and Implementation", hrs: 3, done: false },
+      { id: "itcs-4123", code: "ITCS 4123", name: "Visualization and Visual Communication", hrs: 3, done: false },
       { id: "engl-3160", code: "ENGL 3160", name: "Writing Intensive course", hrs: 3, done: false },
-      { id: "elective-1", code: "DTSC 4420", name: "Spatial Data Science", hrs: 3, done: false },
+      { id: "itcs-4122", code: "ITCS 4122", name: "Visual Analytics", hrs: 3, done: false },
     ],
   },
   {
@@ -182,9 +174,9 @@ export const SEMESTER_PLAN = [
     status: "planned",
     hint: "Ethics, policy, and applied analytics.",
     courses: [
-      { id: "dtsc-4440", code: "DTSC 4440", name: "AI Policy & Ethics", hrs: 3, done: false },
-      { id: "stat-3128", code: "STAT 3128", name: "Probability & Statistics", hrs: 3, done: false },
-      { id: "itsc-3688", code: "ITSC 3688", name: "Data Science practicum", hrs: 3, done: false },
+      { id: "itis-3200", code: "ITIS 3200", name: "Introduction to Information Security and Privacy", hrs: 3, done: false },
+      { id: "stat-3128", code: "STAT 3128", name: "Applied Regression Analysis", hrs: 3, done: false },
+      { id: "itsc-3688", code: "ITSC 3688", name: "Computers and Their Impact on Society", hrs: 3, done: false },
       { id: "gen-ed-1", code: "LBST 2102", name: "Degree requirement", hrs: 3, done: false },
     ],
   },
@@ -246,4 +238,4 @@ export const CAREERS = [
     employers: "Fintech companies, e-commerce, software firms" },
 ];
 
-export const STEP_LABELS = ["Reflect", "Explore courses", "Your roadmap", "Meet the careers"];
+export const STEP_LABELS = ["Reflect", "Your plan", "Explore courses", "Meet the careers"];

@@ -39,5 +39,6 @@ advisor chat assistant.
 - Course list and credit hours come from the uploaded curriculum deck.
 - Salary ranges on the career cards are approximate, entry-level, U.S.
   national figures — not location- or employer-specific.
-- The "electives" (DTSC 4420 / 4430 / 4440) are proposed/hypothetical, not
-  real catalog entries — they're flagged as such in the UI.
+- Eligibility only includes courses with verified prerequisite rules in
+  `src/data/prerequisites.js`; unverified catalog entries are blocked until
+  their rules are added.

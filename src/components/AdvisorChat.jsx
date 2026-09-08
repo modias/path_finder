@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MessageCircle, X, Send, Loader2 } from "lucide-react";
+import { apiFetch } from "../lib/api";
+import { friendlyApiError, parseJsonResponse } from "../lib/apiResponse";
 import { STEP_LABELS } from "../data/curriculum";
 
 const INK = "#0B2E22";
@@ -9,15 +11,6 @@ const SURFACE = "#FFFFFF";
 const MUTED = "#5B6660";
 
 const WELCOME = "Hi! I'm your DS Pathway advisor assistant. Ask me about courses, electives, your roadmap, or career paths in the data science major.";
-
-function serializeSelections(selections) {
-  const out = {};
-  for (const [key, set] of Object.entries(selections)) {
-    if (set instanceof Set) out[key] = [...set];
-    else if (Array.isArray(set)) out[key] = set;
-  }
-  return out;
-}
 
 export default function AdvisorChat({ isOpen, onOpenChange, context, showFab = true }) {
   const [messages, setMessages] = useState([{ role: "assistant", content: WELCOME }]);
@@ -51,7 +44,7 @@ export default function AdvisorChat({ isOpen, onOpenChange, context, showFab = t
         .slice(1)
         .map((m) => ({ role: m.role, content: m.content }));
 
-      const res = await fetch("/api/chat", {
+      const res = await apiFetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -60,7 +53,7 @@ export default function AdvisorChat({ isOpen, onOpenChange, context, showFab = t
           context: {
             step: context.step,
             stepLabel: STEP_LABELS[context.step],
-            selections: serializeSelections(context.selections),
+            reflectAnswers: context.reflectAnswers,
             note: context.note,
             careerTarget: context.careerTarget,
             registerTerm: context.registerTerm,
@@ -70,19 +63,22 @@ export default function AdvisorChat({ isOpen, onOpenChange, context, showFab = t
         }),
       });
 
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || "Something went wrong.");
 
       setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
     } catch (err) {
-      setError(err.message);
+      const message = friendlyApiError(err);
+      setError(message);
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: err.message.includes("API key")
+          content: message.includes("API key")
             ? "The advisor chat isn't configured yet. Add your GEMINI_API_KEY to a .env file and restart the server."
-            : "Sorry, I couldn't respond right now. Please try again in a moment.",
+            : message.includes("npm run dev")
+              ? message
+              : "Sorry, I couldn't respond right now. Please try again in a moment.",
         },
       ]);
     } finally {

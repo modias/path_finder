@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Sparkles, MessageCircle, Route, ClipboardList, NotebookPen } from "lucide-react";
+import { Sparkles, MessageCircle, Route, NotebookPen } from "lucide-react";
 
 const INK = "#0B2E22";
 const GREEN = "#1F7A54";
@@ -49,14 +49,6 @@ export default function PersonalizedBar({ onOpenChat, onViewRoadmap }) {
         >
           <NotebookPen size={14} color={GREEN} />
           Register courses
-        </Link>
-        <Link
-          to="/degree-works"
-          className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-opacity hover:opacity-90"
-          style={{ background: GREEN, color: "#FFFFFF" }}
-        >
-          <ClipboardList size={14} />
-          Degree Works
         </Link>
       </div>
     </div>

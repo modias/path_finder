@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Calendar, CircleCheck, Info, Layers, Plus, Check } from "lucide-react";
 import { NEXT_SEMESTERS, PLAN_INPUTS } from "../data/curriculum";
 import { useSchedule } from "../data/schedule";
+import { buildStudentRecord } from "../lib/studentRecord";
+import { filterPlanSemesters } from "../lib/filterPlanSemesters";
 
 const INK = "#0B2E22";
 const GOLD = "#B3A369";
@@ -154,12 +156,38 @@ function SemesterCard({ semester, preferredLoad, canAddToPlan = false }) {
 /**
  * Personal plan banner + next-semester cards (shared by Your plan + Register courses).
  */
-export default function PersonalPlanPanel({ onAskAdvisor, compact = false }) {
-  const [preferredLoad, setPreferredLoad] = useState(String(PLAN_INPUTS.preferredLoad));
+export default function PersonalPlanPanel({
+  onAskAdvisor,
+  compact = false,
+  appliedLoad: appliedLoadProp,
+  onAppliedLoadChange,
+}) {
+  const [draftLoad, setDraftLoad] = useState(String(PLAN_INPUTS.preferredLoad));
+  const [internalAppliedLoad, setInternalAppliedLoad] = useState(PLAN_INPUTS.preferredLoad);
+  const [appliedFlash, setAppliedFlash] = useState("");
 
-  const loadNum = Number(preferredLoad);
-  const hasValidLoad = Number.isFinite(loadNum) && preferredLoad !== "";
-  const loadLabel = hasValidLoad ? loadNum : PLAN_INPUTS.preferredLoad;
+  const appliedLoad = appliedLoadProp ?? internalAppliedLoad;
+  const setAppliedLoad = (value) => {
+    if (onAppliedLoadChange) onAppliedLoadChange(value);
+    else setInternalAppliedLoad(value);
+  };
+
+  const planSemesters = useMemo(() => {
+    const record = buildStudentRecord();
+    return filterPlanSemesters(NEXT_SEMESTERS, record, { creditLoad: appliedLoad });
+  }, [appliedLoad]);
+
+  const loadNum = Number(draftLoad);
+  const hasValidLoad = Number.isFinite(loadNum) && draftLoad !== "" && loadNum > 0;
+  const hasDraftChanges = hasValidLoad && loadNum !== appliedLoad;
+
+  const handleApply = () => {
+    if (!hasValidLoad) return;
+    setAppliedLoad(loadNum);
+    setAppliedFlash("Plan updated for your preferred load.");
+    window.clearTimeout(handleApply._t);
+    handleApply._t = window.setTimeout(() => setAppliedFlash(""), 2500);
+  };
 
   let loadWarning = null;
   if (hasValidLoad && loadNum < 12) {
@@ -188,8 +216,11 @@ export default function PersonalPlanPanel({ onAskAdvisor, compact = false }) {
               type="number"
               min={1}
               max={24}
-              value={preferredLoad}
-              onChange={(e) => setPreferredLoad(e.target.value)}
+              value={draftLoad}
+              onChange={(e) => setDraftLoad(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleApply();
+              }}
               aria-label="Preferred credits per semester"
               aria-invalid={!!loadWarning}
               className="text-sm font-semibold text-center outline-none preferred-load-input"
@@ -255,7 +286,7 @@ export default function PersonalPlanPanel({ onAskAdvisor, compact = false }) {
             What to take next
           </h1>
           <p className="text-base leading-relaxed" style={{ color: "#FFFFFF", maxWidth: "36rem" }}>
-            Based on your completed courses and prerequisites, here is your recommended schedule.
+            Based on your course history and prerequisite rules — only courses you are currently eligible for are listed.
           </p>
         </div>
 
@@ -297,15 +328,31 @@ export default function PersonalPlanPanel({ onAskAdvisor, compact = false }) {
               </div>
             ))}
           </div>
+          <div className="mt-3 flex items-center justify-end gap-3">
+            {appliedFlash && (
+              <p className="text-[11px] font-medium" style={{ color: "#BFD9CB" }}>
+                {appliedFlash}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={!hasDraftChanges}
+              className="text-[11px] px-3 py-1.5 rounded-full font-semibold transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: GOLD, color: INK }}
+            >
+              Apply
+            </button>
+          </div>
         </div>
       </div>
 
       <div className={`grid md:grid-cols-2 gap-5 ${compact ? "mb-4" : "mb-6"}`}>
-        {NEXT_SEMESTERS.map((sem) => (
+        {planSemesters.map((sem) => (
           <SemesterCard
             key={sem.term}
             semester={sem}
-            preferredLoad={loadLabel}
+            preferredLoad={appliedLoad}
             canAddToPlan={sem.term === "Fall 2026"}
           />
         ))}

@@ -1,5 +1,4 @@
 import { Loader2, Sparkles, BookOpen } from "lucide-react";
-import { CATEGORY_META } from "../data/courseCatalog";
 
 const INK = "#0B2E22";
 const GOLD = "#B3A369";
@@ -8,21 +7,24 @@ const GREEN = "#1F7A54";
 const SURFACE = "#FFFFFF";
 const MUTED = "#5B6660";
 
-const CATEGORY_COLORS = {
-  gen_ed: { bg: "#E8F1FB", color: "#1A5FA8" },
-  core: { bg: "#E8F5EE", color: GREEN },
-  outside_elective: { bg: "#F3EAF8", color: "#7B4B9A" },
-  computing: { bg: "#EEF0EA", color: INK },
-  capstone: { bg: "#F3EED9", color: GOLD_DEEP },
-};
+/**
+ * @param {number} percent
+ * @returns {{ bg: string, color: string }}
+ */
+function matchColors(percent) {
+  if (percent >= 80) return { bg: "#E8F5EE", color: GREEN };
+  if (percent >= 60) return { bg: "#F3EED9", color: GOLD_DEEP };
+  return { bg: "#F5F6F1", color: MUTED };
+}
 
 /**
- * @typedef {{ code: string, title: string, credits: number, category?: string, reason: string }} Recommendation
+ * @typedef {{ code: string, title: string, credits: number, category?: string, matchPercent?: number, matchLabel?: string, reason: string }} Recommendation
  */
 
 export function RecommendationCard({ course }) {
-  const colors = CATEGORY_COLORS[course.category] || CATEGORY_COLORS.outside_elective;
-  const meta = CATEGORY_META[course.category];
+  const percent = Number.isFinite(course.matchPercent) ? course.matchPercent : null;
+  const colors = percent != null ? matchColors(percent) : { bg: "#F5F6F1", color: MUTED };
+  const label = course.matchLabel || (percent != null ? `${percent}% match` : null);
 
   return (
     <div
@@ -30,13 +32,15 @@ export function RecommendationCard({ course }) {
       style={{ background: SURFACE, border: `1px solid ${colors.color}33` }}
     >
       <div className="flex items-center justify-between mb-2 gap-2">
-        {meta && (
+        {label ? (
           <span
             className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full font-semibold"
             style={{ background: colors.bg, color: colors.color }}
           >
-            {meta.short}
+            {label}
           </span>
+        ) : (
+          <span />
         )}
         <span className="text-[11px] shrink-0" style={{ color: GOLD_DEEP }}>
           {course.credits} hrs
@@ -111,7 +115,7 @@ export default function CourseAdvisor({ loading, error, summary, recommendations
       )}
 
       <p className="text-[10px] mt-4" style={{ color: MUTED }}>
-        Recommendations are filtered by prerequisite eligibility only — confirm availability with your advisor before registering.
+        Match labels come from your Reflect ratings (Strong match / Good option). Recommendations are still filtered by prerequisite eligibility — confirm availability with your advisor before registering.
       </p>
     </div>
   );

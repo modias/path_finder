@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ClipboardList, NotebookPen, Route } from "lucide-react";
+import { NotebookPen, Route } from "lucide-react";
 
 const PAGE_BG = "#00543C";
 const INK = "#0B2E22";
@@ -23,7 +23,7 @@ export default function Home() {
           Your degree,<br />mapped out.
         </h1>
         <p className="text-base sm:text-lg mb-12 max-w-xl" style={{ color: ON_DARK_MUTED }}>
-          See the semester plan ahead, check Degree Works, or register courses from your plan and the catalog.
+          See the semester plan ahead or register courses from your plan and the catalog.
         </p>
 
         <div className="flex flex-wrap gap-4">
@@ -34,14 +34,6 @@ export default function Home() {
           >
             <Route size={18} />
             See the path ahead
-          </Link>
-          <Link
-            to="/degree-works"
-            className="flex items-center gap-2 px-6 py-3.5 rounded-full text-sm font-semibold transition-colors"
-            style={{ background: "transparent", color: "#FFFFFF", border: "1.5px solid rgba(255,255,255,0.55)" }}
-          >
-            <ClipboardList size={18} />
-            Degree Works
           </Link>
           <Link
             to="/register-courses"

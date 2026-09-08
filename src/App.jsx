@@ -1,21 +1,31 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Heart, Compass, Sparkles, Wrench, ArrowRight, ArrowLeft, Check,
+  Sparkles, ArrowRight, ArrowLeft, Check,
   BarChart3, Database, Cpu, LineChart, ShieldCheck, Users, Star, ChevronDown,
-  Home, ClipboardList, NotebookPen, Calendar, Gauge,
+  Home, NotebookPen, Heart, Compass,
 } from "lucide-react";
+import RatingRow from "./components/RatingRow";
+import { INTEREST_QUESTIONS, STYLE_QUESTIONS, INDUSTRY_OPTIONS } from "./data/reflectQuestions";
+import { apiFetch } from "./lib/api";
+import { friendlyApiError, parseJsonResponse } from "./lib/apiResponse";
+import { buildReflectAnswers, inferCareerTarget } from "./lib/reflectScoring";
+import { rankCareersForStudent } from "./lib/careerFromCourses";
 import AdvisorChat from "./components/AdvisorChat";
 import PersonalizedBar from "./components/PersonalizedBar";
 import CatalogBrowser from "./components/CatalogBrowser";
-import PersonalPlanPanel from "./components/PersonalPlanPanel";
+import ElectivesPanel from "./components/ElectivesPanel";
 import CourseAdvisor from "./components/CourseAdvisor";
 import {
-  STAGES, ELECTIVES,
+  STAGES,
+  PLAN_INPUTS,
+  NEXT_SEMESTERS,
   CAREERS as CAREER_DATA,
   REFLECT_TERM_OPTIONS,
   REFLECT_CREDIT_LOAD_OPTIONS,
 } from "./data/curriculum";
+import { buildStudentRecord } from "./lib/studentRecord";
+import { filterPlanSemesters } from "./lib/filterPlanSemesters";
 
 const PAGE_BG = "#00543C";
 const INK = "#0B2E22";
@@ -27,71 +37,8 @@ const MUTED = "#5B6660";
 const ON_DARK_MUTED = "#BFD9CB";
 const SUPPORT_TINT = "#EEF0EA";
 
-const QUESTION_GROUPS = [
-  {
-    key: "interests",
-    icon: Heart,
-    prompt: "What pulls your attention?",
-    options: ["Sports & games", "Health & medicine", "Business & money", "Social justice", "Art & design", "The environment", "Storytelling", "Building things"],
-  },
-  {
-    key: "values",
-    icon: Compass,
-    prompt: "What do you care about?",
-    options: ["Fairness", "Truth in numbers", "Helping people directly", "Solving puzzles", "Making things simpler", "Being independent", "Working on a team", "Long-term impact"],
-  },
-  {
-    key: "strengths",
-    icon: Wrench,
-    prompt: "Where are you already strong?",
-    options: ["Math", "Writing", "Pattern-spotting", "Patience with detail", "Explaining ideas", "Coding basics", "Asking good questions", "Staying organized"],
-  },
-];
-
-const REFLECTION_PROMPTS = [
-  "What's a problem in the world you'd want to help fix?",
-  "If you shadowed a data scientist for a day, what part of the job would you hope to see?",
-  "What attracts you to data science, and what do you picture yourself doing with it?",
-];
-
-const REFLECT_SINGLE_GROUPS = [
-  {
-    key: "registerTerm",
-    icon: Calendar,
-    prompt: "When are you planning to register?",
-    options: REFLECT_TERM_OPTIONS,
-  },
-  {
-    key: "creditLoad",
-    icon: Gauge,
-    prompt: "How many credit hours are you aiming for?",
-    options: REFLECT_CREDIT_LOAD_OPTIONS,
-  },
-];
-
-function serializeTagSelections(selections) {
-  const pick = (key) => {
-    const val = selections[key];
-    if (val instanceof Set) return [...val];
-    if (Array.isArray(val)) return val;
-    return [];
-  };
-  return {
-    interests: pick("interests"),
-    values: pick("values"),
-    strengths: pick("strengths"),
-  };
-}
-
-function buildReflectAnswers(selections, registerTerm, creditLoad, note, careerTarget) {
-  return {
-    ...serializeTagSelections(selections),
-    registerTerm,
-    creditLoad,
-    note: note?.trim() || "",
-    careerTarget,
-  };
-}
+const DEFAULT_REGISTER_TERM = REFLECT_TERM_OPTIONS[0] || "";
+const DEFAULT_CREDIT_LOAD = REFLECT_CREDIT_LOAD_OPTIONS[1] || "";
 
 const CAREER_META = [
   { icon: BarChart3, photo: "https://i.pravatar.cc/400?img=47" },
@@ -105,7 +52,7 @@ const CAREER_META = [
 const CAREERS = CAREER_DATA.map((career, i) => ({ ...career, ...CAREER_META[i] }));
 
 function Stepper({ step, setStep }) {
-  const steps = ["Reflect", "Explore courses", "Your plan", "Meet the careers"];
+  const steps = ["Reflect", "Your plan", "Explore courses", "Meet the careers"];
   return (
     <div className="flex items-center gap-3 mb-10">
       {steps.map((label, i) => (
@@ -129,12 +76,12 @@ function Stepper({ step, setStep }) {
 }
 
 function ReflectStep({
-  selections,
-  toggle,
-  registerTerm,
-  setRegisterTerm,
-  creditLoad,
-  setCreditLoad,
+  interestRatings,
+  setInterestRating,
+  styleRatings,
+  setStyleRating,
+  industries,
+  toggleIndustry,
   note,
   setNote,
   onNext,
@@ -151,94 +98,89 @@ function ReflectStep({
         Before the data,<br />a little about you.
       </h1>
       <p className="text-base mb-10 max-w-xl" style={{ color: ON_DARK_MUTED }}>
-        There's no wrong answer here — this just shapes how we introduce you to the major. Pick whatever's true, then tell us the rest in your own words.
+        Rate each area honestly — there's no wrong answer. Your ratings shape which electives we highlight and recommend, not which ones you're allowed to take.
       </p>
 
-      <div className="grid sm:grid-cols-3 gap-6 mb-10">
-        {QUESTION_GROUPS.map((group) => {
-          const Icon = group.icon;
-          return (
-            <div key={group.key}>
-              <div className="flex items-center gap-2 mb-3">
-                <Icon size={18} color={GOLD} />
-                <h3 className="text-sm font-semibold" style={{ color: "#FFFFFF" }}>{group.prompt}</h3>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {group.options.map((opt) => {
-                  const active = selections[group.key]?.has(opt);
-                  return (
-                    <button
-                      key={opt}
-                      onClick={() => toggle(group.key, opt)}
-                      className="text-sm px-3 py-1.5 rounded-full border transition-colors text-left"
-                      style={{
-                        borderColor: active ? GOLD : "rgba(255,255,255,0.4)",
-                        background: active ? GOLD : "transparent",
-                        color: active ? INK : "#FFFFFF",
-                      }}
-                    >
-                      {opt}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+      <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(11,46,34,0.55)", border: "1px solid rgba(179,163,105,0.35)" }}>
+        <div className="flex items-center gap-2 mb-5">
+          <Heart size={18} color={GOLD} />
+          <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
+            Group 1 — Interest by specialty area
+          </h3>
+        </div>
+        {INTEREST_QUESTIONS.map((question) => (
+          <RatingRow
+            key={question.key}
+            prompt={question.prompt}
+            lowLabel={question.lowLabel}
+            highLabel={question.highLabel}
+            value={interestRatings[question.key] ?? null}
+            onChange={(rating) => setInterestRating(question.key, rating)}
+          />
+        ))}
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-6 mb-10">
-        {REFLECT_SINGLE_GROUPS.map((group) => {
-          const Icon = group.icon;
-          const selected = group.key === "registerTerm" ? registerTerm : creditLoad;
-          return (
-            <div key={group.key}>
-              <div className="flex items-center gap-2 mb-3">
-                <Icon size={18} color={GOLD} />
-                <h3 className="text-sm font-semibold" style={{ color: "#FFFFFF" }}>{group.prompt}</h3>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {group.options.map((opt) => {
-                  const active = selected === opt;
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => (group.key === "registerTerm" ? setRegisterTerm(opt) : setCreditLoad(opt))}
-                      className="text-sm px-3 py-1.5 rounded-full border transition-colors text-left"
-                      style={{
-                        borderColor: active ? GOLD : "rgba(255,255,255,0.4)",
-                        background: active ? GOLD : "transparent",
-                        color: active ? INK : "#FFFFFF",
-                      }}
-                    >
-                      {opt}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+      <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(11,46,34,0.55)", border: "1px solid rgba(179,163,105,0.35)" }}>
+        <div className="flex items-center gap-2 mb-5">
+          <Compass size={18} color={GOLD} />
+          <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
+            Group 2 — Work style &amp; comfort
+          </h3>
+        </div>
+        {STYLE_QUESTIONS.map((question) => (
+          <RatingRow
+            key={question.key}
+            prompt={question.prompt}
+            lowLabel={question.lowLabel}
+            highLabel={question.highLabel}
+            value={styleRatings[question.key] ?? null}
+            onChange={(rating) => setStyleRating(question.key, rating)}
+          />
+        ))}
+      </div>
+
+      <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(11,46,34,0.55)", border: "1px solid rgba(179,163,105,0.35)" }}>
+        <div className="flex items-center gap-2 mb-4">
+          <BarChart3 size={18} color={GOLD} />
+          <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
+            Industries you&apos;re curious about
+          </h3>
+        </div>
+        <p className="text-sm mb-4" style={{ color: ON_DARK_MUTED }}>
+          Optional — pick any that interest you. Matching electives get a small boost.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {INDUSTRY_OPTIONS.map((option) => {
+            const selected = industries.includes(option.key);
+            return (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => toggleIndustry(option.key)}
+                className="text-sm px-3 py-1.5 rounded-full transition-opacity"
+                style={{
+                  background: selected ? GOLD : "transparent",
+                  color: selected ? INK : "#FFFFFF",
+                  border: `1.5px solid ${selected ? GOLD : "rgba(255,255,255,0.45)"}`,
+                }}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="rounded-2xl p-6 mb-8" style={{ background: SURFACE }}>
         <div className="flex items-center gap-2 mb-4">
           <Sparkles size={18} color={GREEN} />
-          <h3 className="text-sm font-semibold" style={{ color: INK }}>A few things to write about</h3>
+          <h3 className="text-sm font-semibold" style={{ color: INK }}>Anything else your advisor should know?</h3>
         </div>
-        <ul className="mb-4 space-y-1.5">
-          {REFLECTION_PROMPTS.map((q) => (
-            <li key={q} className="text-sm flex gap-2" style={{ color: MUTED }}>
-              <span style={{ color: GOLD_DEEP }}>&bull;</span>{q}
-            </li>
-          ))}
-        </ul>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Write a few sentences on any (or all) of the above..."
-          rows={5}
+          placeholder="Optional — constraints, goals, or context we should keep in mind..."
+          rows={4}
           className="w-full rounded-xl p-4 text-sm outline-none"
           style={{ background: "#F5F6F1", border: "1px solid #D9D6C9", color: INK }}
         />
@@ -248,7 +190,7 @@ function ReflectStep({
         <button
           type="button"
           onClick={onGetRecommendations}
-          disabled={recommendLoading || !registerTerm || !creditLoad}
+          disabled={recommendLoading}
           className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold disabled:opacity-50"
           style={{ background: GREEN, color: "#FFFFFF" }}
         >
@@ -331,8 +273,17 @@ function ExploreStep() {
   );
 }
 
-function RoadmapStep({ selections, onAskAdvisor }) {
+function RoadmapStep({ reflectAnswers, onAskAdvisor }) {
   const [openStages, setOpenStages] = useState(new Set());
+
+  const extraElectiveCredits = useMemo(() => {
+    const record = buildStudentRecord();
+    const plan = filterPlanSemesters(NEXT_SEMESTERS, record, {
+      creditLoad: PLAN_INPUTS.preferredLoad,
+    });
+    const fallCredits = (plan[0]?.courses || []).reduce((sum, course) => sum + course.credits, 0);
+    return Math.max(0, PLAN_INPUTS.preferredLoad - fallCredits);
+  }, []);
 
   const toggleStage = (title) => {
     setOpenStages((prev) => {
@@ -340,13 +291,6 @@ function RoadmapStep({ selections, onAskAdvisor }) {
       next.has(title) ? next.delete(title) : next.add(title);
       return next;
     });
-  };
-
-  const isRecommended = (course) => {
-    if (!course.recommendIf) return false;
-    const chosen = selections[course.recommendIf.group];
-    if (!chosen) return false;
-    return course.recommendIf.options.some((o) => chosen.has(o));
   };
 
   return (
@@ -358,7 +302,7 @@ function RoadmapStep({ selections, onAskAdvisor }) {
         Your plan.
       </h1>
       <p className="text-base mb-8 max-w-2xl" style={{ color: ON_DARK_MUTED }}>
-        Recommended next semesters, electives worth a look, and the road through the major.
+        Electives worth a look, and the road through the major.
       </p>
 
       <div className="flex flex-wrap gap-3 mb-8">
@@ -370,14 +314,6 @@ function RoadmapStep({ selections, onAskAdvisor }) {
           <NotebookPen size={16} />
           Register courses
         </Link>
-        <Link
-          to="/degree-works"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-opacity hover:opacity-90"
-          style={{ background: GREEN, color: "#FFFFFF" }}
-        >
-          <ClipboardList size={16} />
-          Degree Works
-        </Link>
         <button
           type="button"
           onClick={onAskAdvisor}
@@ -388,22 +324,7 @@ function RoadmapStep({ selections, onAskAdvisor }) {
         </button>
       </div>
 
-      <PersonalPlanPanel onAskAdvisor={onAskAdvisor} />
-
-      <div className="rounded-2xl p-6 mb-10" style={{ background: SURFACE, border: "1px solid #E4E1D4" }}>
-        <div className="flex items-center gap-2 mb-1">
-          <Star size={16} color={GOLD_DEEP} />
-          <h3 className="text-lg" style={{ fontFamily: "Georgia, serif", color: INK }}>Electives worth a look</h3>
-        </div>
-        <p className="text-sm mb-4" style={{ color: MUTED }}>
-          From your Degree Works electives. Highlighted ones connect to what you picked in step one.
-        </p>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {ELECTIVES.map((e) => (
-            <CourseCard key={e.code} course={{ ...e, kind: "support" }} recommended={isRecommended(e)} />
-          ))}
-        </div>
-      </div>
+      <ElectivesPanel reflectAnswers={reflectAnswers} extraCredits={extraElectiveCredits} />
 
       <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>
         The road through the major
@@ -457,17 +378,6 @@ function RoadmapStep({ selections, onAskAdvisor }) {
   );
 }
 
-function inferCareerTarget(selections) {
-  const interests = selections.interests || new Set();
-  const values = selections.values || new Set();
-  if (interests.has("Health & medicine")) return "Data scientist";
-  if (interests.has("Business & money")) return "Data analyst";
-  if (values.has("Fairness")) return "Data ethics & policy analyst";
-  if (interests.has("Building things")) return "Data engineer";
-  if (interests.has("Art & design") || interests.has("Storytelling")) return "UX / product analyst";
-  return "Data scientist";
-}
-
 function CareerCard({ career, flipped, onToggle }) {
   const Icon = career.icon;
   return (
@@ -490,6 +400,11 @@ function CareerCard({ career, flipped, onToggle }) {
           </div>
           <div className="flex flex-col flex-1 px-3.5 pt-2.5 pb-3">
             <p className="text-xs leading-snug" style={{ color: MUTED }}>{career.oneLiner}</p>
+            {career.matchReason && (
+              <p className="text-[10px] leading-snug mt-1.5" style={{ color: GOLD_DEEP }}>
+                {career.matchReason}
+              </p>
+            )}
             <span className="text-[10px] mt-auto pt-1.5" style={{ color: GOLD_DEEP }}>Click to see details</span>
           </div>
         </div>
@@ -498,6 +413,25 @@ function CareerCard({ career, flipped, onToggle }) {
         <div className="flip-face flip-back" style={{ background: INK, color: "#fff" }}>
           <h4 className="text-sm font-semibold mb-2" style={{ color: GOLD, fontFamily: "Georgia, serif" }}>{career.role}</h4>
           <p className="text-[11px] leading-relaxed mb-2.5" style={{ color: "#E4EEE8" }}>{career.does}</p>
+
+          {career.supportingCourses?.length > 0 && (
+            <div className="mb-2.5">
+              <p className="text-[9px] uppercase tracking-wide mb-1" style={{ color: "#9FB5AA" }}>
+                From your planned courses
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {career.supportingCourses.map((code) => (
+                  <span
+                    key={code}
+                    className="text-[10px] px-2 py-0.5 rounded-full"
+                    style={{ background: "rgba(255,255,255,0.08)", color: "#D7E4DC", border: "1px solid rgba(255,255,255,0.16)" }}
+                  >
+                    {code}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-1.5 mb-2.5">
             {career.skills.map((s) => (
@@ -526,18 +460,34 @@ function CareerCard({ career, flipped, onToggle }) {
   );
 }
 
-function CareersStep({ flipped, toggleFlip }) {
+function CareersStep({ flipped, toggleFlip, recommendations, reflectAnswers }) {
+  const matchedCareers = useMemo(() => {
+    const ranked = rankCareersForStudent({ recommendations, reflectAnswers });
+    return ranked.map((career) => {
+      const meta = CAREERS.find((entry) => entry.role === career.role);
+      return meta ? { ...career, ...meta } : career;
+    });
+  }, [recommendations, reflectAnswers]);
+
+  const plannedCodes = useMemo(
+    () =>
+      [...new Set(matchedCareers.flatMap((career) => career.supportingCourses || []))].sort(),
+    [matchedCareers]
+  );
+
   return (
     <div>
       <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>Step four</p>
       <h1 className="text-4xl sm:text-5xl mb-3 leading-tight" style={{ fontFamily: "Georgia, serif", color: "#FFFFFF" }}>
-        Where this curriculum leads.
+        Where your courses lead.
       </h1>
       <p className="text-base mb-8 max-w-xl" style={{ color: ON_DARK_MUTED }}>
-        Every role below draws directly on the courses you just looked at. Flip a card for what they do, pay, and who hires for it.
+          {plannedCodes.length
+          ? `These roles fit the classes on your plan (${plannedCodes.slice(0, 4).join(", ")}${plannedCodes.length > 4 ? ", …" : ""}). Flip a card for what they do, pay, and who hires for it.`
+          : "These roles are inferred from your interests for now. Get course recommendations on Reflect to tailor careers to classes you'll take."}
       </p>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-4">
-        {CAREERS.map((c, i) => (
+        {matchedCareers.map((c, i) => (
           <CareerCard key={c.role} career={c} flipped={flipped.has(i)} onToggle={() => toggleFlip(i)} />
         ))}
       </div>
@@ -551,9 +501,11 @@ function CareersStep({ flipped, toggleFlip }) {
 export default function App() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
-  const [selections, setSelections] = useState({});
-  const [registerTerm, setRegisterTerm] = useState(REFLECT_TERM_OPTIONS[0] || "");
-  const [creditLoad, setCreditLoad] = useState(REFLECT_CREDIT_LOAD_OPTIONS[1] || "");
+  const [interestRatings, setInterestRatings] = useState({});
+  const [styleRatings, setStyleRatings] = useState({});
+  const [industries, setIndustries] = useState([]);
+  const registerTerm = DEFAULT_REGISTER_TERM;
+  const creditLoad = DEFAULT_CREDIT_LOAD;
   const [note, setNote] = useState("");
   const [flipped, setFlipped] = useState(new Set());
   const [chatOpen, setChatOpen] = useState(false);
@@ -562,15 +514,29 @@ export default function App() {
   const [recommendSummary, setRecommendSummary] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
 
-  const careerTarget = inferCareerTarget(selections);
-  const reflectAnswers = buildReflectAnswers(selections, registerTerm, creditLoad, note, careerTarget);
+  const careerTarget = inferCareerTarget({ interestRatings, styleRatings });
+  const reflectAnswers = buildReflectAnswers(
+    interestRatings,
+    styleRatings,
+    registerTerm,
+    creditLoad,
+    note,
+    careerTarget,
+    industries
+  );
 
-  const toggle = (groupKey, opt) => {
-    setSelections((prev) => {
-      const next = new Set(prev[groupKey] || []);
-      next.has(opt) ? next.delete(opt) : next.add(opt);
-      return { ...prev, [groupKey]: next };
-    });
+  const setInterestRating = (key, rating) => {
+    setInterestRatings((prev) => ({ ...prev, [key]: rating }));
+  };
+
+  const setStyleRating = (key, rating) => {
+    setStyleRatings((prev) => ({ ...prev, [key]: rating }));
+  };
+
+  const toggleIndustry = (key) => {
+    setIndustries((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
+    );
   };
 
   const toggleFlip = (i) => {
@@ -588,12 +554,12 @@ export default function App() {
     setRecommendations([]);
 
     try {
-      const res = await fetch("/api/recommend-courses", {
+      const res = await apiFetch("/api/recommend-courses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers: reflectAnswers }),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || "Something went wrong.");
 
       setRecommendSummary(data.summary || null);
@@ -602,7 +568,7 @@ export default function App() {
         document.getElementById("course-recommendations")?.scrollIntoView({ behavior: "smooth" });
       });
     } catch (err) {
-      setRecommendError(err.message);
+      setRecommendError(friendlyApiError(err));
     } finally {
       setRecommendLoading(false);
     }
@@ -656,18 +622,18 @@ export default function App() {
         {step >= 1 && (
           <PersonalizedBar
             onOpenChat={() => setChatOpen(true)}
-            onViewRoadmap={() => setStep(2)}
+            onViewRoadmap={() => setStep(1)}
           />
         )}
 
         {step === 0 && (
           <ReflectStep
-            selections={selections}
-            toggle={toggle}
-            registerTerm={registerTerm}
-            setRegisterTerm={setRegisterTerm}
-            creditLoad={creditLoad}
-            setCreditLoad={setCreditLoad}
+            interestRatings={interestRatings}
+            setInterestRating={setInterestRating}
+            styleRatings={styleRatings}
+            setStyleRating={setStyleRating}
+            industries={industries}
+            toggleIndustry={toggleIndustry}
             note={note}
             setNote={setNote}
             onNext={() => setStep(1)}
@@ -678,9 +644,16 @@ export default function App() {
             recommendations={recommendations}
           />
         )}
-        {step === 1 && <ExploreStep />}
-        {step === 2 && <RoadmapStep selections={selections} onAskAdvisor={() => setChatOpen(true)} />}
-        {step === 3 && <CareersStep flipped={flipped} toggleFlip={toggleFlip} />}
+        {step === 1 && <RoadmapStep reflectAnswers={reflectAnswers} onAskAdvisor={() => setChatOpen(true)} />}
+        {step === 2 && <ExploreStep />}
+        {step === 3 && (
+          <CareersStep
+            flipped={flipped}
+            toggleFlip={toggleFlip}
+            recommendations={recommendations}
+            reflectAnswers={reflectAnswers}
+          />
+        )}
 
         <div className="flex items-center justify-between mt-12">
           {step > 0 ? (
@@ -694,7 +667,7 @@ export default function App() {
               className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold"
               style={{ background: GOLD, color: INK }}
             >
-              {step === 0 ? "See the courses" : step === 1 ? "See your plan" : "See the careers"} <ArrowRight size={16} />
+              {step === 0 ? "See your plan" : step === 1 ? "See the courses" : "See the careers"} <ArrowRight size={16} />
             </button>
           )}
         </div>
@@ -705,7 +678,6 @@ export default function App() {
         onOpenChange={setChatOpen}
         context={{
           step,
-          selections,
           note,
           careerTarget,
           registerTerm,

@@ -1,9 +1,11 @@
-import { getRulesForCourse, normalizeCode } from "../data/prerequisites.js";
+import { getRulesForCourse, hasVerifiedRules, normalizeCode } from "../data/prerequisites.js";
+
+const UNVERIFIED_PREREQ_MSG = "Prerequisites not verified for this course";
 
 /**
  * @typedef {{ completed: string[], inProgress: string[] }} StudentRecord
  * @typedef {{ subject: string, number: string, title?: string, credits?: number, category?: string, blurb?: string }} CatalogCourse
- * @typedef {{ eligible: boolean, missingPrereqs: string[], missingCoreqs: string[] }} EligibilityResult
+ * @typedef {{ eligible: boolean, missingPrereqs: string[], missingCoreqs: string[], unverified?: boolean }} EligibilityResult
  */
 
 /**
@@ -28,32 +30,34 @@ function hasCompletedOrInProgress(record, code) {
 /**
  * @param {import("../data/prerequisites.js").Rule} rule
  * @param {StudentRecord} record
+ * @param {(record: StudentRecord, code: string) => boolean} [isSatisfied]
  * @returns {boolean}
  */
-function satisfiesRule(rule, record) {
-  if (typeof rule === "string") return hasCompleted(record, rule);
-  if (rule.all) return rule.all.every((r) => satisfiesRule(r, record));
-  if (rule.oneOf) return rule.oneOf.some((r) => satisfiesRule(r, record));
+function satisfiesRule(rule, record, isSatisfied = hasCompleted) {
+  if (typeof rule === "string") return isSatisfied(record, rule);
+  if (rule.all) return rule.all.every((r) => satisfiesRule(r, record, isSatisfied));
+  if (rule.oneOf) return rule.oneOf.some((r) => satisfiesRule(r, record, isSatisfied));
   return false;
 }
 
 /**
  * @param {import("../data/prerequisites.js").Rule} rule
  * @param {StudentRecord} record
+ * @param {(record: StudentRecord, code: string) => boolean} [isSatisfied]
  * @returns {string[]}
  */
-function missingFromRule(rule, record) {
-  if (typeof rule === "string") return hasCompleted(record, rule) ? [] : [normalizeCode(rule)];
+function missingFromRule(rule, record, isSatisfied = hasCompleted) {
+  if (typeof rule === "string") {
+    return isSatisfied(record, rule) ? [] : [normalizeCode(rule)];
+  }
   if (rule.all) {
-    return rule.all.flatMap((r) => missingFromRule(r, record));
+    return rule.all.flatMap((r) => missingFromRule(r, record, isSatisfied));
   }
   if (rule.oneOf) {
-    const satisfied = rule.oneOf.some((r) => satisfiesRule(r, record));
-    if (satisfied) return [];
-    const options = rule.oneOf.flatMap((r) => {
-      if (typeof r === "string") return [normalizeCode(r)];
-      return [`(${describeRule(r)})`];
-    });
+    if (rule.oneOf.some((r) => satisfiesRule(r, record, isSatisfied))) return [];
+    const options = rule.oneOf.map((r) =>
+      typeof r === "string" ? normalizeCode(r) : describeRule(r)
+    );
     return [`One of: ${options.join(", ")}`];
   }
   return [];
@@ -81,10 +85,34 @@ export function checkEligibility(courseCode, record) {
   if (record.completed.includes(normalized)) {
     return { eligible: false, missingPrereqs: [], missingCoreqs: [] };
   }
+  if (record.inProgress.includes(normalized)) {
+    return { eligible: false, missingPrereqs: [], missingCoreqs: [] };
+  }
 
-  const { prereqs, coreqs } = getRulesForCourse(normalized);
+  if (!hasVerifiedRules(normalized)) {
+    return {
+      eligible: false,
+      missingPrereqs: [UNVERIFIED_PREREQ_MSG],
+      missingCoreqs: [],
+      unverified: true,
+    };
+  }
+
+  const rules = getRulesForCourse(normalized);
+  if (!rules) {
+    return {
+      eligible: false,
+      missingPrereqs: [UNVERIFIED_PREREQ_MSG],
+      missingCoreqs: [],
+      unverified: true,
+    };
+  }
+
+  const { prereqs, coreqs } = rules;
   const missingPrereqs = prereqs.flatMap((rule) => missingFromRule(rule, record));
-  const missingCoreqs = coreqs.filter((code) => !hasCompletedOrInProgress(record, code));
+  const missingCoreqs = coreqs.flatMap((rule) =>
+    missingFromRule(rule, record, hasCompletedOrInProgress)
+  );
 
   const eligible = missingPrereqs.length === 0 && missingCoreqs.length === 0;
   return { eligible, missingPrereqs, missingCoreqs };
@@ -114,4 +142,20 @@ export function filterToEligibleCodes(codes, eligibleCatalog) {
   return codes
     .map((code) => normalizeCode(code))
     .filter((code) => eligibleSet.has(code));
+}
+
+/**
+ * Catalog courses that exist in COURSES but lack verified prerequisite data.
+ * @param {CatalogCourse[]} catalog
+ * @returns {Array<{ code: string, title: string, category?: string }>}
+ */
+export function listUnverifiedCatalogCourses(catalog) {
+  return catalog
+    .map((c) => ({
+      code: normalizeCode(`${c.subject} ${c.number}`),
+      title: c.title || "",
+      category: c.category,
+    }))
+    .filter((c) => !hasVerifiedRules(c.code))
+    .sort((a, b) => a.code.localeCompare(b.code));
 }

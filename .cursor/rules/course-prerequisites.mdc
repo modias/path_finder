@@ -29,9 +29,13 @@ a course a student isn't actually eligible for.
 - `src/data/prerequisites.js` is the ONLY place prerequisite/corequisite data lives.
   Every entry must carry a source comment: either a `catalog.charlotte.edu`
   `preview_course_nopop.php` URL (authoritative, per-course) or another named
-  official UNC Charlotte source if the catalog page couldn't be found. Entries
-  without a verified source must be written as an empty `{ prereqs: [], coreqs: [] }`
-  with a `// TODO: verify` comment — never guess or infer a plausible-sounding rule.
+  official UNC Charlotte source if the catalog page couldn't be found.
+- Courses with confirmed no course-completion prerequisites go in `VERIFIED_NO_PREREQ`
+  (gen-ed / intro entries reviewed on purpose). Catalog courses not in
+  `PREREQUISITES` or `VERIFIED_NO_PREREQ` are **unverified and ineligible** —
+  never fall back to implicit "no prerequisite."
+- Entries without a verified source must NOT be added as empty rules to make a
+  course eligible. Leave them unlisted until catalog data is confirmed.
 
 ## When adding or editing a course's rule
 
@@ -61,9 +65,10 @@ a course a student isn't actually eligible for.
 ## Tests
 
 - `src/lib/eligibility.js` must keep its unit tests passing (or gain new ones) for
-  any change to rule-checking logic: no-prereq courses always eligible, missing
-  prereqs blocking eligibility, `oneOf` rules satisfied by any single listed
-  course, and coreqs satisfiable by either `completed` or `inProgress`.
+  any change to rule-checking logic: verified-no-prereq courses eligible,
+  unverified courses blocked, missing prereqs blocking eligibility, `oneOf` rules
+  satisfied by any single listed course, and coreqs satisfiable by either
+  `completed` or `inProgress`.
 - Any change to `prerequisites.js` that alters an existing course's rule should be
   called out explicitly in the PR/commit description, since it changes what
   students are told they can register for.
