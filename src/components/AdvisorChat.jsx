@@ -10,7 +10,8 @@ const GREEN = "#1F7A54";
 const SURFACE = "#FFFFFF";
 const MUTED = "#5B6660";
 
-const WELCOME = "Hi! I'm your DS Pathway advisor assistant. Ask me about courses, electives, your roadmap, or career paths in the data science major.";
+const WELCOME =
+  "Ask me anything about a class — grading breakdown, whether there's a midterm or final, what the final is worth, projects, attendance, and other syllabus details. Name the course code if you can (e.g. DTSC 1301).";
 
 export default function AdvisorChat({ isOpen, onOpenChange, context, showFab = true }) {
   const [messages, setMessages] = useState([{ role: "assistant", content: WELCOME }]);
@@ -114,7 +115,7 @@ export default function AdvisorChat({ isOpen, onOpenChange, context, showFab = t
           <div className="flex items-center justify-between px-4 py-3" style={{ background: INK }}>
             <div>
               <p className="text-sm font-semibold" style={{ color: "#FFFFFF" }}>Advisor assistant</p>
-              <p className="text-[10px]" style={{ color: "#BFD9CB" }}>Powered by Gemini · Planning tool only</p>
+              <p className="text-[10px]" style={{ color: "#BFD9CB" }}>Powered by Gemini · Planning & syllabus help</p>
             </div>
             <button
               type="button"
@@ -166,7 +167,7 @@ export default function AdvisorChat({ isOpen, onOpenChange, context, showFab = t
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about courses, electives, careers..."
+              placeholder="e.g. What % is the final in DTSC 1301?"
               disabled={loading}
               className="flex-1 rounded-full px-4 py-2 text-sm outline-none"
               style={{ background: "#F5F6F1", border: "1px solid #D9D6C9", color: INK }}

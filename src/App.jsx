@@ -3,29 +3,30 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Sparkles, ArrowRight, ArrowLeft, Check,
   BarChart3, Database, Cpu, LineChart, ShieldCheck, Users, Star, ChevronDown,
-  Home, NotebookPen, Heart, Compass,
+  Home, Heart, Compass,
 } from "lucide-react";
 import RatingRow from "./components/RatingRow";
-import { INTEREST_QUESTIONS, STYLE_QUESTIONS, INDUSTRY_OPTIONS } from "./data/reflectQuestions";
+import {
+  INTEREST_QUESTIONS,
+  STYLE_QUESTIONS,
+  TOPIC_OPTIONS,
+  SKILL_OPTIONS,
+  DELIVERABLE_OPTIONS,
+} from "./data/reflectQuestions";
 import { apiFetch } from "./lib/api";
 import { friendlyApiError, parseJsonResponse } from "./lib/apiResponse";
 import { buildReflectAnswers, inferCareerTarget } from "./lib/reflectScoring";
 import { rankCareersForStudent } from "./lib/careerFromCourses";
 import AdvisorChat from "./components/AdvisorChat";
-import PersonalizedBar from "./components/PersonalizedBar";
 import CatalogBrowser from "./components/CatalogBrowser";
 import ElectivesPanel from "./components/ElectivesPanel";
 import CourseAdvisor from "./components/CourseAdvisor";
 import {
   STAGES,
-  PLAN_INPUTS,
-  NEXT_SEMESTERS,
   CAREERS as CAREER_DATA,
   REFLECT_TERM_OPTIONS,
   REFLECT_CREDIT_LOAD_OPTIONS,
 } from "./data/curriculum";
-import { buildStudentRecord } from "./lib/studentRecord";
-import { filterPlanSemesters } from "./lib/filterPlanSemesters";
 
 const PAGE_BG = "#00543C";
 const INK = "#0B2E22";
@@ -75,13 +76,71 @@ function Stepper({ step, setStep }) {
   );
 }
 
+function PickChipGroup({
+  title,
+  hint,
+  options,
+  selected,
+  onToggle,
+  max,
+}) {
+  const atMax = max != null && selected.length >= max;
+  return (
+    <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(11,46,34,0.55)", border: "1px solid rgba(179,163,105,0.35)" }}>
+      <div className="flex items-center gap-2 mb-4">
+        <BarChart3 size={18} color={GOLD} />
+        <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
+          {title}
+        </h3>
+      </div>
+      <p className="text-sm mb-4" style={{ color: ON_DARK_MUTED }}>
+        {hint}
+        {max != null && (
+          <span>
+            {" "}
+            ({selected.length}/{max})
+          </span>
+        )}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const isSelected = selected.includes(option.key);
+          const disabled = atMax && !isSelected;
+          return (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => onToggle(option.key)}
+              disabled={disabled}
+              className="text-sm px-3 py-1.5 rounded-full transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                background: isSelected ? GOLD : "transparent",
+                color: isSelected ? INK : "#FFFFFF",
+                border: `1.5px solid ${isSelected ? GOLD : "rgba(255,255,255,0.45)"}`,
+              }}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ReflectStep({
   interestRatings,
   setInterestRating,
   styleRatings,
   setStyleRating,
-  industries,
-  toggleIndustry,
+  topicsEnjoyed,
+  toggleTopic,
+  skillsHave,
+  toggleSkillHave,
+  skillsWant,
+  toggleSkillWant,
+  deliverables,
+  toggleDeliverable,
   note,
   setNote,
   onNext,
@@ -98,14 +157,14 @@ function ReflectStep({
         Before the data,<br />a little about you.
       </h1>
       <p className="text-base mb-10 max-w-xl" style={{ color: ON_DARK_MUTED }}>
-        Rate each area honestly — there's no wrong answer. Your ratings shape which electives we highlight and recommend, not which ones you're allowed to take.
+        Rate each area honestly — there&apos;s no wrong answer. Your ratings shape which electives we highlight and recommend, not which ones you&apos;re allowed to take.
       </p>
 
       <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(11,46,34,0.55)", border: "1px solid rgba(179,163,105,0.35)" }}>
         <div className="flex items-center gap-2 mb-5">
           <Heart size={18} color={GOLD} />
           <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
-            Group 1 — Interest by specialty area
+            Section A — Interest by specialty area
           </h3>
         </div>
         {INTEREST_QUESTIONS.map((question) => (
@@ -124,7 +183,7 @@ function ReflectStep({
         <div className="flex items-center gap-2 mb-5">
           <Compass size={18} color={GOLD} />
           <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
-            Group 2 — Work style &amp; comfort
+            Section B — Work style &amp; comfort
           </h3>
         </div>
         {STYLE_QUESTIONS.map((question) => (
@@ -139,37 +198,44 @@ function ReflectStep({
         ))}
       </div>
 
-      <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(11,46,34,0.55)", border: "1px solid rgba(179,163,105,0.35)" }}>
-        <div className="flex items-center gap-2 mb-4">
-          <BarChart3 size={18} color={GOLD} />
-          <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
-            Industries you&apos;re curious about
-          </h3>
-        </div>
-        <p className="text-sm mb-4" style={{ color: ON_DARK_MUTED }}>
-          Optional — pick any that interest you. Matching electives get a small boost.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {INDUSTRY_OPTIONS.map((option) => {
-            const selected = industries.includes(option.key);
-            return (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => toggleIndustry(option.key)}
-                className="text-sm px-3 py-1.5 rounded-full transition-opacity"
-                style={{
-                  background: selected ? GOLD : "transparent",
-                  color: selected ? INK : "#FFFFFF",
-                  border: `1.5px solid ${selected ? GOLD : "rgba(255,255,255,0.45)"}`,
-                }}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <p className="text-xs tracking-widest uppercase mb-3" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>
+        Section C — Topics, skills &amp; outcomes
+      </p>
+
+      <PickChipGroup
+        title="Which topics do you actually enjoy?"
+        hint="Pick up to 4."
+        options={TOPIC_OPTIONS}
+        selected={topicsEnjoyed}
+        onToggle={toggleTopic}
+        max={4}
+      />
+
+      <PickChipGroup
+        title="Which skills do you already have?"
+        hint="Optional — pick any that apply."
+        options={SKILL_OPTIONS}
+        selected={skillsHave}
+        onToggle={toggleSkillHave}
+      />
+
+      <PickChipGroup
+        title="Which skills do you want to walk out of UNC Charlotte with?"
+        hint="Pick up to 6."
+        options={SKILL_OPTIONS}
+        selected={skillsWant}
+        onToggle={toggleSkillWant}
+        max={6}
+      />
+
+      <PickChipGroup
+        title="What do you want to be able to show an employer?"
+        hint="Pick up to 3."
+        options={DELIVERABLE_OPTIONS}
+        selected={deliverables}
+        onToggle={toggleDeliverable}
+        max={3}
+      />
 
       <div className="rounded-2xl p-6 mb-8" style={{ background: SURFACE }}>
         <div className="flex items-center gap-2 mb-4">
@@ -276,15 +342,6 @@ function ExploreStep() {
 function RoadmapStep({ reflectAnswers, onAskAdvisor }) {
   const [openStages, setOpenStages] = useState(new Set());
 
-  const extraElectiveCredits = useMemo(() => {
-    const record = buildStudentRecord();
-    const plan = filterPlanSemesters(NEXT_SEMESTERS, record, {
-      creditLoad: PLAN_INPUTS.preferredLoad,
-    });
-    const fallCredits = (plan[0]?.courses || []).reduce((sum, course) => sum + course.credits, 0);
-    return Math.max(0, PLAN_INPUTS.preferredLoad - fallCredits);
-  }, []);
-
   const toggleStage = (title) => {
     setOpenStages((prev) => {
       const next = new Set(prev);
@@ -306,14 +363,6 @@ function RoadmapStep({ reflectAnswers, onAskAdvisor }) {
       </p>
 
       <div className="flex flex-wrap gap-3 mb-8">
-        <Link
-          to="/register-courses"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-opacity hover:opacity-90"
-          style={{ background: GOLD, color: INK }}
-        >
-          <NotebookPen size={16} />
-          Register courses
-        </Link>
         <button
           type="button"
           onClick={onAskAdvisor}
@@ -324,7 +373,7 @@ function RoadmapStep({ reflectAnswers, onAskAdvisor }) {
         </button>
       </div>
 
-      <ElectivesPanel reflectAnswers={reflectAnswers} extraCredits={extraElectiveCredits} />
+      <ElectivesPanel reflectAnswers={reflectAnswers} />
 
       <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>
         The road through the major
@@ -503,7 +552,10 @@ export default function App() {
   const [step, setStep] = useState(0);
   const [interestRatings, setInterestRatings] = useState({});
   const [styleRatings, setStyleRatings] = useState({});
-  const [industries, setIndustries] = useState([]);
+  const [topicsEnjoyed, setTopicsEnjoyed] = useState([]);
+  const [skillsHave, setSkillsHave] = useState([]);
+  const [skillsWant, setSkillsWant] = useState([]);
+  const [deliverables, setDeliverables] = useState([]);
   const registerTerm = DEFAULT_REGISTER_TERM;
   const creditLoad = DEFAULT_CREDIT_LOAD;
   const [note, setNote] = useState("");
@@ -522,7 +574,8 @@ export default function App() {
     creditLoad,
     note,
     careerTarget,
-    industries
+    [],
+    { topicsEnjoyed, skillsHave, skillsWant, deliverables }
   );
 
   const setInterestRating = (key, rating) => {
@@ -533,11 +586,18 @@ export default function App() {
     setStyleRatings((prev) => ({ ...prev, [key]: rating }));
   };
 
-  const toggleIndustry = (key) => {
-    setIndustries((prev) =>
-      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
-    );
+  const toggleInList = (setter, max) => (key) => {
+    setter((prev) => {
+      if (prev.includes(key)) return prev.filter((item) => item !== key);
+      if (max != null && prev.length >= max) return prev;
+      return [...prev, key];
+    });
   };
+
+  const toggleTopic = toggleInList(setTopicsEnjoyed, 4);
+  const toggleSkillHave = toggleInList(setSkillsHave);
+  const toggleSkillWant = toggleInList(setSkillsWant, 6);
+  const toggleDeliverable = toggleInList(setDeliverables, 3);
 
   const toggleFlip = (i) => {
     setFlipped((prev) => {
@@ -619,21 +679,20 @@ export default function App() {
 
         <Stepper step={step} setStep={setStep} />
 
-        {step >= 1 && (
-          <PersonalizedBar
-            onOpenChat={() => setChatOpen(true)}
-            onViewRoadmap={() => setStep(1)}
-          />
-        )}
-
         {step === 0 && (
           <ReflectStep
             interestRatings={interestRatings}
             setInterestRating={setInterestRating}
             styleRatings={styleRatings}
             setStyleRating={setStyleRating}
-            industries={industries}
-            toggleIndustry={toggleIndustry}
+            topicsEnjoyed={topicsEnjoyed}
+            toggleTopic={toggleTopic}
+            skillsHave={skillsHave}
+            toggleSkillHave={toggleSkillHave}
+            skillsWant={skillsWant}
+            toggleSkillWant={toggleSkillWant}
+            deliverables={deliverables}
+            toggleDeliverable={toggleDeliverable}
             note={note}
             setNote={setNote}
             onNext={() => setStep(1)}

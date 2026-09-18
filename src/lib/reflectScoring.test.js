@@ -97,6 +97,60 @@ describe("scoreCourseForReflect", () => {
     assert.ok(withIndustry.drivers.some((d) => /industry fit/i.test(d)));
   });
 
+  it("adds a topic enjoyment bonus when Q19 maps to the course cluster", () => {
+    const withTopic = scoreCourseForReflectDetail("ITCS 3153", {
+      interestRatings: { ai: 4 },
+      topicsEnjoyed: ["aiAutomation", "gamesMedia"],
+    });
+    const without = scoreCourseForReflectDetail("ITCS 3153", {
+      interestRatings: { ai: 4 },
+      topicsEnjoyed: [],
+    });
+    assert.equal(Number((withTopic.score - without.score).toFixed(2)), 0.4);
+    assert.ok(withTopic.drivers.some((d) => /topic fit/i.test(d)));
+  });
+
+  it("boosts courses that teach a skill the student wants (Q21)", () => {
+    const want = scoreCourseForReflectDetail("ITIS 3135", {
+      skillsWant: ["webFullStack"],
+    });
+    const plain = scoreCourseForReflectDetail("ITIS 3135", {
+      skillsWant: [],
+    });
+    assert.equal(Number((want.score - plain.score).toFixed(2)), 0.35);
+  });
+
+  it("nudges intro courses down when the student already has that skill (Q20)", () => {
+    const have = scoreCourseForReflectDetail("ITIS 3200", {
+      skillsHave: ["security"],
+    });
+    const plain = scoreCourseForReflectDetail("ITIS 3200", {
+      skillsHave: [],
+    });
+    assert.equal(Number((have.score - plain.score).toFixed(2)), -0.25);
+  });
+
+  it("does not nudge advanced courses for skills already have (Q20)", () => {
+    const have = scoreCourseForReflectDetail("ITIS 4221", {
+      skillsHave: ["security"],
+    });
+    const plain = scoreCourseForReflectDetail("ITIS 4221", {
+      skillsHave: [],
+    });
+    assert.equal(have.score, plain.score);
+  });
+
+  it("adds a deliverable match bonus (Q22)", () => {
+    const withDeliverable = scoreCourseForReflectDetail("ITCS 4123", {
+      deliverables: ["dashboard", "liveApp"],
+    });
+    const without = scoreCourseForReflectDetail("ITCS 4123", {
+      deliverables: [],
+    });
+    assert.equal(Number((withDeliverable.score - without.score).toFixed(2)), 0.35);
+    assert.ok(withDeliverable.drivers.some((d) => /deliverable fit/i.test(d)));
+  });
+
   it("clamps the final score between 1 and 5", () => {
     const high = scoreCourseForReflect("ITCS 3156", {
       interestRatings: { ai: 5 },
@@ -109,10 +163,12 @@ describe("scoreCourseForReflect", () => {
 });
 
 describe("matchLabelFromScore", () => {
-  it("labels strong, good, and weak bands", () => {
-    assert.equal(matchLabelFromScore(4.2), "Strong match");
-    assert.equal(matchLabelFromScore(3.1), "Good option");
-    assert.equal(matchLabelFromScore(2.4), "Weak match");
+  it("labels strong, good, and weak bands from the percent scale", () => {
+    assert.equal(matchLabelFromScore(4.2), "Strong match"); // 80%
+    assert.equal(matchLabelFromScore(4), "Strong match"); // 75%
+    assert.equal(matchLabelFromScore(3.1), "Good option"); // 53%
+    assert.equal(matchLabelFromScore(3), "Good option"); // 50%
+    assert.equal(matchLabelFromScore(2.4), "Weak match"); // 35%
   });
 });
 
@@ -121,8 +177,16 @@ describe("matchPercentFromScore", () => {
     assert.equal(matchPercentFromScore(5), 100);
   });
 
-  it("maps a 4/5 specialty score to 80%", () => {
-    assert.equal(matchPercentFromScore(4), 80);
+  it("maps a 4/5 specialty score to 75%", () => {
+    assert.equal(matchPercentFromScore(4), 75);
+  });
+
+  it("maps a 3/5 neutral score to 50%", () => {
+    assert.equal(matchPercentFromScore(3), 50);
+  });
+
+  it("maps a 1/5 score to 0%", () => {
+    assert.equal(matchPercentFromScore(1), 0);
   });
 
   it("clamps above 5 to 100%", () => {
@@ -223,5 +287,20 @@ describe("formatReflectAnswersForPrompt", () => {
     assert.match(text, /Healthcare \/ biotech/);
     assert.match(text, /Interested in internships/);
     assert.match(text, /Data scientist/);
+  });
+
+  it("includes Q19–Q22 multi-select answers in the prompt text", () => {
+    const text = formatReflectAnswersForPrompt({
+      topicsEnjoyed: ["aiAutomation"],
+      skillsHave: ["security"],
+      skillsWant: ["mlAi", "dataViz"],
+      deliverables: ["dashboard"],
+    });
+
+    assert.match(text, /AI & automation/);
+    assert.match(text, /Security/);
+    assert.match(text, /Machine learning & AI/);
+    assert.match(text, /Data visualization/);
+    assert.match(text, /dashboard someone uses/i);
   });
 });

@@ -12,8 +12,8 @@ const MUTED = "#5B6660";
  * @returns {{ bg: string, color: string }}
  */
 function matchColors(percent) {
-  if (percent >= 80) return { bg: "#E8F5EE", color: GREEN };
-  if (percent >= 60) return { bg: "#F3EED9", color: GOLD_DEEP };
+  if (percent >= 75) return { bg: "#E8F5EE", color: GREEN };
+  if (percent >= 50) return { bg: "#F3EED9", color: GOLD_DEEP };
   return { bg: "#F5F6F1", color: MUTED };
 }
 
@@ -24,7 +24,10 @@ function matchColors(percent) {
 export function RecommendationCard({ course }) {
   const percent = Number.isFinite(course.matchPercent) ? course.matchPercent : null;
   const colors = percent != null ? matchColors(percent) : { bg: "#F5F6F1", color: MUTED };
-  const label = course.matchLabel || (percent != null ? `${percent}% match` : null);
+  const label =
+    percent != null
+      ? `${percent}% · ${course.matchLabel || "Match"}`
+      : course.matchLabel || null;
 
   return (
     <div

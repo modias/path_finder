@@ -4,6 +4,7 @@ import {
   buildRecommendPrompt,
   finalizeRecommendationsFromText,
   isBlockedFromRecommendation,
+  MIN_RECOMMENDATIONS,
   packRecommendationsToLoad,
   parseCreditLoadHours,
   recommendCourses,
@@ -104,11 +105,12 @@ describe("recommendation blocklist", () => {
       interestRatings: { ai: 5 },
     });
 
-    assert.deepEqual(
-      result.recommendations.map((r) => r.code),
-      ["ITCS 3153"]
-    );
+    assert.ok(result.recommendations.length >= MIN_RECOMMENDATIONS);
+    assert.equal(result.recommendations[0].code, "ITCS 3153");
     assert.equal(result.recommendations[0].matchPercent, 100);
+    for (const rec of result.recommendations) {
+      assert.equal(isBlockedFromRecommendation(rec.code), false);
+    }
   });
 });
 
@@ -125,10 +127,9 @@ describe("finalizeRecommendationsFromText", () => {
 
     const result = finalizeRecommendationsFromText(fakeGemini, eligible);
 
-    assert.deepEqual(
-      result.recommendations.map((r) => r.code).sort(),
-      ["ITCS 3153", "ITIS 3200"].sort()
-    );
+    assert.ok(result.recommendations.length >= MIN_RECOMMENDATIONS);
+    assert.ok(result.recommendations.some((r) => r.code === "ITCS 3153"));
+    assert.ok(result.recommendations.some((r) => r.code === "ITIS 3200"));
     assert.ok(!result.recommendations.some((r) => r.code === "FAKE 9999"));
   });
 
@@ -139,7 +140,7 @@ describe("finalizeRecommendationsFromText", () => {
     );
 
     assert.ok(Array.isArray(result.recommendations));
-    assert.ok(result.recommendations.length >= 1);
+    assert.ok(result.recommendations.length >= MIN_RECOMMENDATIONS);
     assert.ok(result.recommendations.length <= 5);
     assert.ok(typeof result.summary === "string" && result.summary.length > 0);
     for (const rec of result.recommendations) {
@@ -149,7 +150,21 @@ describe("finalizeRecommendationsFromText", () => {
     }
   });
 
-  it("returns recommendations: [] with a sensible summary when all model codes are filtered out", () => {
+  it("pads to at least 3 recommendations when the model returns only one code", () => {
+    const fakeGemini = JSON.stringify({
+      summary: "One strong pick.",
+      courses: [{ code: "ITCS 3153", reason: "Matches your AI interest." }],
+    });
+
+    const result = finalizeRecommendationsFromText(fakeGemini, eligible, {
+      interestRatings: { ai: 5 },
+    });
+
+    assert.ok(result.recommendations.length >= MIN_RECOMMENDATIONS);
+    assert.equal(result.recommendations[0].code, "ITCS 3153");
+  });
+
+  it("falls back to ranked eligible courses when all model codes are filtered out", () => {
     const fakeGemini = JSON.stringify({
       summary: "",
       courses: [
@@ -160,10 +175,9 @@ describe("finalizeRecommendationsFromText", () => {
 
     const result = finalizeRecommendationsFromText(fakeGemini, eligible);
 
-    assert.deepEqual(result.recommendations, []);
+    assert.ok(result.recommendations.length >= MIN_RECOMMENDATIONS);
     assert.equal(result.eligibleCount, eligible.length);
     assert.ok(typeof result.summary === "string" && result.summary.length > 0);
-    assert.match(result.summary, /eligible/i);
   });
 });
 
@@ -213,7 +227,7 @@ describe("recommendCourses", () => {
     });
 
     assert.ok(Array.isArray(result.recommendations));
-    assert.ok(result.recommendations.length >= 1);
+    assert.ok(result.recommendations.length >= MIN_RECOMMENDATIONS);
     assert.ok(result.recommendations.length <= 5);
     assert.ok(typeof result.summary === "string" && result.summary.length > 0);
     assert.ok(typeof result.eligibleCount === "number" && result.eligibleCount >= 1);
@@ -244,6 +258,20 @@ describe("shortlistEligibleCourses", () => {
           category: "outside_elective",
         },
         {
+          subject: "ITIS",
+          number: "3200",
+          title: "Introduction to Information Security and Privacy",
+          credits: 3,
+          category: "outside_elective",
+        },
+        {
+          subject: "ITCS",
+          number: "4122",
+          title: "Visual Analytics",
+          credits: 3,
+          category: "outside_elective",
+        },
+        {
           subject: "ITSC",
           number: "2214",
           title: "Data Structures & Algorithms",
@@ -256,8 +284,71 @@ describe("shortlistEligibleCourses", () => {
     );
 
     assert.equal(`${list[0].subject} ${list[0].number}`, "ITCS 3153");
+    assert.ok(list.length >= MIN_RECOMMENDATIONS);
     assert.ok(!list.some((c) => `${c.subject} ${c.number}` === "ITSC 2214"));
     assert.ok(!list.some((c) => c.category === "gen_ed"));
+  });
+
+  it("backfills to at least 3 electives when style penalties weaken other matches", () => {
+    const list = shortlistEligibleCourses(
+      [
+        {
+          subject: "WRDS",
+          number: "1104",
+          title: "Writing studio",
+          credits: 4,
+          category: "gen_ed",
+        },
+        {
+          subject: "ENGL",
+          number: "2100",
+          title: "Writing about literature",
+          credits: 3,
+          category: "gen_ed",
+        },
+        {
+          subject: "BIOL",
+          number: "1110",
+          title: "Principles of Biology I",
+          credits: 3,
+          category: "gen_ed",
+        },
+        {
+          subject: "ITCS",
+          number: "4123",
+          title: "Visualization and Visual Communication",
+          credits: 3,
+          category: "outside_elective",
+        },
+        {
+          subject: "ITIS",
+          number: "4180",
+          title: "Mobile Application Development",
+          credits: 3,
+          category: "outside_elective",
+        },
+        {
+          subject: "ITIS",
+          number: "4350",
+          title: "Design Prototyping",
+          credits: 3,
+          category: "outside_elective",
+        },
+      ],
+      {
+        interestRatings: { dataViz: 5 },
+        styleRatings: { programmingConfidence: 1 },
+        topicsEnjoyed: ["dataPatterns"],
+        skillsWant: ["dataViz"],
+      },
+      5
+    );
+
+    assert.ok(list.length >= MIN_RECOMMENDATIONS);
+    assert.equal(`${list[0].subject} ${list[0].number}`, "ITCS 4123");
+    const electives = list.filter((c) => c.category === "outside_elective");
+    assert.ok(electives.length >= MIN_RECOMMENDATIONS);
+    assert.ok(!list.slice(0, MIN_RECOMMENDATIONS).some((c) => c.category === "gen_ed"));
   });
 });
 
@@ -300,6 +391,23 @@ describe("parseCreditLoadHours and packRecommendationsToLoad", () => {
     assert.deepEqual(
       packed.map((rec) => rec.code),
       ["A", "B", "C"]
+    );
+  });
+
+  it("keeps at least 3 recommendations even when credit load is below that total", () => {
+    const packed = packRecommendationsToLoad(
+      [
+        { code: "ITCS 4123", title: "Viz", credits: 3, reason: "a" },
+        { code: "ITIS 4180", title: "Mobile", credits: 3, reason: "b" },
+        { code: "ITIS 4350", title: "UX", credits: 3, reason: "c" },
+        { code: "ITCS 3153", title: "AI", credits: 3, reason: "d" },
+      ],
+      { creditLoad: "3" }
+    );
+    assert.equal(packed.length, MIN_RECOMMENDATIONS);
+    assert.deepEqual(
+      packed.map((rec) => rec.code),
+      ["ITCS 4123", "ITIS 4180", "ITIS 4350"]
     );
   });
 });

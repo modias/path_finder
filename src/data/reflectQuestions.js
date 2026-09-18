@@ -100,13 +100,221 @@ export const STYLE_QUESTIONS = [
     lowLabel: "Want to build a polished, demoable product",
     highLabel: "Want to do original research/analysis",
   },
-  {
-    key: "specializeVsBroad",
-    prompt: "Would you rather specialize deeply or stay broad across a few areas?",
-    lowLabel: "Stay broad across a few areas",
-    highLabel: "Go deep in one specialty",
-  },
 ];
+
+/**
+ * Q19 — topics you enjoy (pick up to 4).
+ * `clusters` maps to Section A specialty keys for a flat ranking bonus.
+ */
+export const TOPIC_OPTIONS = [
+  { key: "buildingSoftware", label: "Building software", clusters: ["webMobile"] },
+  { key: "dataPatterns", label: "Data & patterns", clusters: ["dataViz"] },
+  { key: "aiAutomation", label: "AI & automation", clusters: ["ai"] },
+  { key: "securityPrivacy", label: "Security & privacy", clusters: ["cybersecurity"] },
+  { key: "healthMedicine", label: "Health & medicine", clusters: ["bioinformatics"] },
+  { key: "businessMoney", label: "Business & money", clusters: ["dataViz", "ai"] },
+  { key: "designCreativity", label: "Design & creativity", clusters: ["hci"] },
+  { key: "hardwareRobotics", label: "Hardware & robotics", clusters: ["robotics"] },
+  { key: "teachingHelping", label: "Teaching & helping people", clusters: ["hci"] },
+  { key: "citiesEnvironment", label: "Cities & environment", clusters: ["dataViz"] },
+  { key: "gamesMedia", label: "Games & media", clusters: ["games"] },
+  { key: "researchDiscovery", label: "Research & discovery", clusters: ["ai", "bioinformatics"] },
+];
+
+/** Shared skill list for Q20 (already have) and Q21 (want to walk out with). */
+export const SKILL_OPTIONS = [
+  { key: "programmingFundamentals", label: "Programming fundamentals" },
+  { key: "dataStructures", label: "Data structures & algorithms" },
+  { key: "webFullStack", label: "Web & full-stack" },
+  { key: "mobileDev", label: "Mobile development" },
+  { key: "databaseSql", label: "Database design & SQL" },
+  { key: "cloudDistributed", label: "Cloud & distributed systems" },
+  { key: "devopsCicd", label: "DevOps & CI/CD" },
+  { key: "security", label: "Security" },
+  { key: "networking", label: "Networking" },
+  { key: "mlAi", label: "Machine learning & AI" },
+  { key: "statistics", label: "Statistics & inference" },
+  { key: "dataViz", label: "Data visualization" },
+  { key: "dataEngineering", label: "Data engineering" },
+  { key: "mathModeling", label: "Mathematical modeling" },
+  { key: "uxResearch", label: "UX research" },
+  { key: "interfaceDesign", label: "Interface & visual design" },
+  { key: "productThinking", label: "Product thinking" },
+  { key: "projectAgile", label: "Project & agile management" },
+  { key: "businessAnalysis", label: "Business analysis" },
+  { key: "financialAnalysis", label: "Financial analysis" },
+  { key: "marketingAnalytics", label: "Marketing analytics" },
+  { key: "stakeholderComm", label: "Stakeholder communication" },
+  { key: "technicalWriting", label: "Technical writing" },
+  { key: "teamworkLeadership", label: "Teamwork & leadership" },
+  { key: "ethicsGovernance", label: "Ethics & governance" },
+  { key: "researchMethods", label: "Research methods" },
+  { key: "healthInformatics", label: "Health informatics" },
+  { key: "bioinformatics", label: "Bioinformatics" },
+  { key: "gisSpatial", label: "GIS & spatial analysis" },
+  { key: "gameInteractive", label: "Game & interactive media" },
+  { key: "hardwareEmbedded", label: "Hardware & embedded" },
+  { key: "systemsAdmin", label: "Systems administration" },
+];
+
+/** Q22 — what you want to show an employer (pick up to 3). */
+export const DELIVERABLE_OPTIONS = [
+  { key: "liveApp", label: "An app or site that's actually live" },
+  { key: "modelAnalysis", label: "A model or analysis with real results" },
+  { key: "designCaseStudy", label: "A design case study" },
+  { key: "securityWriteup", label: "Security labs and CTF write-ups" },
+  { key: "dashboard", label: "A dashboard someone uses" },
+  { key: "researchPaper", label: "A paper, poster, or lab experience" },
+  { key: "physicalDevice", label: "A physical device I built" },
+  { key: "clientWork", label: "Work I did for a real client" },
+];
+
+/**
+ * Skills each elective mainly teaches. `intro` = courses that teach the skill from scratch
+ * (Q20 already-have nudges these down slightly; Q21 want bumps all listed courses).
+ */
+export const SKILL_COURSE_TAGS = {
+  programmingFundamentals: {
+    courses: ["ITSC 1212", "ITSC 1213"],
+    intro: ["ITSC 1212", "ITSC 1213"],
+  },
+  dataStructures: {
+    courses: ["ITSC 2214", "ITCS 2215"],
+    intro: ["ITSC 2214"],
+  },
+  webFullStack: {
+    courses: ["ITIS 3135", "ITIS 4166", "ITIS 4180"],
+    intro: ["ITIS 3135"],
+  },
+  mobileDev: {
+    courses: ["ITIS 3310", "ITIS 3320"],
+    intro: ["ITIS 3310"],
+  },
+  databaseSql: {
+    courses: ["ITSC 3160", "ITCS 3160"],
+    intro: ["ITSC 3160", "ITCS 3160"],
+  },
+  cloudDistributed: {
+    courses: ["ITCS 3190", "ITCS 4145", "ITIS 3246"],
+    intro: ["ITCS 3190"],
+  },
+  devopsCicd: {
+    courses: ["ITIS 3246", "ITCS 4145"],
+    intro: [],
+  },
+  security: {
+    courses: ["ITIS 3200", "ITIS 4221", "ITIS 4246", "ITIS 4250", "ITIS 4260", "ITIS 4261", "ITIS 4214"],
+    intro: ["ITIS 3200"],
+  },
+  networking: {
+    courses: ["ITSC 3146", "ITIS 4221"],
+    intro: ["ITSC 3146"],
+  },
+  mlAi: {
+    courses: ["ITCS 3153", "ITCS 3156", "ITCS 4101", "ITCS 4236"],
+    intro: ["ITCS 3153"],
+  },
+  statistics: {
+    courses: ["STAT 3128", "STAT 3160", "ITCS 3162"],
+    intro: [],
+  },
+  dataViz: {
+    courses: ["ITCS 4121", "ITCS 4122", "ITCS 4123", "INFO 3236"],
+    intro: ["ITCS 4123"],
+  },
+  dataEngineering: {
+    courses: ["ITCS 3162", "ITCS 4145", "ITSC 3160"],
+    intro: [],
+  },
+  mathModeling: {
+    courses: ["ITCS 3156", "ITCS 4152", "STAT 3128"],
+    intro: [],
+  },
+  uxResearch: {
+    courses: ["ITIS 3130", "ITIS 3140", "ITIS 4350"],
+    intro: ["ITIS 3130"],
+  },
+  interfaceDesign: {
+    courses: ["ITIS 3130", "ITIS 4353", "ITIS 4355", "ITIS 4360"],
+    intro: ["ITIS 3130"],
+  },
+  productThinking: {
+    courses: ["ITIS 4350", "ITIS 4390", "ITCS 4155"],
+    intro: [],
+  },
+  projectAgile: {
+    courses: ["ITSC 4681", "ITSC 4682", "ITIS 4390", "BINF 4900"],
+    intro: [],
+  },
+  businessAnalysis: {
+    courses: ["INFO 3236", "DTSC 2110"],
+    intro: [],
+  },
+  financialAnalysis: {
+    courses: ["INFO 3236"],
+    intro: [],
+  },
+  marketingAnalytics: {
+    courses: ["INFO 3236", "ITCS 4122"],
+    intro: [],
+  },
+  stakeholderComm: {
+    courses: ["ITIS 4390", "ITSC 4681", "DTSC 4301", "DTSC 4302"],
+    intro: [],
+  },
+  technicalWriting: {
+    courses: ["ITSC 3688", "ITSC 4990", "ITSC 4991"],
+    intro: [],
+  },
+  teamworkLeadership: {
+    courses: ["ITCS 4232", "ITCS 4238", "ITIS 4390", "ITSC 4681", "BINF 4900"],
+    intro: [],
+  },
+  ethicsGovernance: {
+    courses: ["ITIS 3200", "ITSC 3688", "ITIS 4221"],
+    intro: ["ITSC 3688"],
+  },
+  researchMethods: {
+    courses: ["ITSC 4990", "ITSC 4991", "DTSC 3900", "BINF 4900"],
+    intro: ["DTSC 3900"],
+  },
+  healthInformatics: {
+    courses: ["BINF 1101", "BINF 2111"],
+    intro: ["BINF 1101"],
+  },
+  bioinformatics: {
+    courses: ["BINF 1101", "BINF 2111", "BINF 3101", "BINF 3121", "BINF 3131"],
+    intro: ["BINF 1101"],
+  },
+  gisSpatial: {
+    courses: ["ITCS 4122"],
+    intro: [],
+  },
+  gameInteractive: {
+    courses: ["ITCS 4230", "ITCS 4231", "ITCS 4232", "ITCS 4235", "ITCS 4236"],
+    intro: ["ITCS 4230"],
+  },
+  hardwareEmbedded: {
+    courses: ["ITCS 4150", "ITCS 4151", "ITCS 4152"],
+    intro: ["ITCS 4150"],
+  },
+  systemsAdmin: {
+    courses: ["ITSC 3146", "ITIS 3246"],
+    intro: ["ITSC 3146"],
+  },
+};
+
+/** Deliverable type → courses whose projects/outputs match (Q22 bump). */
+export const DELIVERABLE_COURSE_TAGS = {
+  liveApp: ["ITIS 3135", "ITIS 3310", "ITIS 3320", "ITIS 4166", "ITIS 4180", "ITCS 4155"],
+  modelAnalysis: ["ITCS 3153", "ITCS 3156", "ITCS 3162", "ITCS 4101", "STAT 3128", "STAT 3160"],
+  designCaseStudy: ["ITIS 3130", "ITIS 3140", "ITIS 4350", "ITIS 4353", "ITIS 4355", "ITIS 4360"],
+  securityWriteup: ["ITIS 3200", "ITIS 4221", "ITIS 4246", "ITIS 4250", "ITIS 4260", "ITIS 4261", "ITIS 4214"],
+  dashboard: ["ITCS 4121", "ITCS 4122", "ITCS 4123", "INFO 3236"],
+  researchPaper: ["ITSC 4990", "ITSC 4991", "DTSC 3900", "BINF 4900"],
+  physicalDevice: ["ITCS 4150", "ITCS 4151", "ITCS 4152"],
+  clientWork: ["ITIS 4390", "ITSC 4681", "ITSC 4682", "DTSC 4301", "DTSC 4302", "ITCS 4238"],
+};
 
 /**
  * Industry / sector picks (multi-select). Used for a small alignment bonus, not a filter.

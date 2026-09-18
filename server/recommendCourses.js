@@ -23,6 +23,8 @@ const FALLBACK_REASON =
 
 const GEMINI_TIMEOUT_MS = 30_000;
 const PROMPT_SHORTLIST_LIMIT = 20;
+/** Minimum courses to show when enough eligible options exist. */
+export const MIN_RECOMMENDATIONS = 3;
 const DEGREE_PROGRESS_CATEGORIES = new Set(["core", "computing", "capstone"]);
 
 /** Never suggest these required studio / support codes (even if eligible). */
@@ -138,9 +140,9 @@ export function excludeBlockedRecommendations(courses) {
 }
 
 /**
- * Rank eligible catalog rows for prompting: Strong match (≥4) first, then Good
- * option (≥3), then remaining core/computing/capstone, then other electives.
- * Weak matches (<3) only fill when the pool is too thin (Rule 9).
+ * Rank eligible catalog rows for prompting: Strong match (≥75% / ≥4) first, then
+ * Good option (≥50% / ≥3), then remaining core/computing/capstone, then other
+ * electives. Weak matches (<50%) only fill when the pool is too thin.
  *
  * @param {Array<{ subject: string, number: string|number, title: string, credits: number, category?: string, blurb?: string }>} eligible
  * @param {Record<string, unknown>} answers
@@ -172,8 +174,9 @@ export function shortlistEligibleCourses(
     return a.code.localeCompare(b.code);
   });
 
-  const preferred = filterByMatchConfidence(scored, Math.min(3, scored.length));
+  const preferred = filterByMatchConfidence(scored, Math.min(MIN_RECOMMENDATIONS, scored.length));
   const pool = preferred.length ? preferred : scored;
+  const minCount = Math.min(MIN_RECOMMENDATIONS, limit, scored.length);
 
   const picked = [];
   const seen = new Set();
@@ -200,8 +203,23 @@ export function shortlistEligibleCourses(
   for (const entry of pool) {
     if (entry.course.category === "outside_elective") take(entry);
   }
+
+  // Preferred-pool filtering can drop weak electives when gen-eds pad confidence.
+  // Always backfill from the full ranked list so we still surface ≥3 options.
+  if (picked.length < minCount) {
+    for (const entry of scored) {
+      if (entry.course.category === "outside_elective") take(entry);
+      if (picked.length >= minCount) break;
+    }
+  }
+  if (picked.length < minCount) {
+    for (const entry of scored) {
+      if (DEGREE_PROGRESS_CATEGORIES.has(entry.course.category)) take(entry);
+      if (picked.length >= minCount) break;
+    }
+  }
   // Gen-ed only fills leftover slots when nothing stronger made the shortlist.
-  if (picked.length === 0) {
+  if (picked.length < minCount) {
     for (const entry of scored) take(entry);
   }
 
@@ -229,7 +247,7 @@ export function fallbackReasonForCourse(course, answers = {}) {
 /**
  * @param {Array<{ subject: string, number: string|number, title: string, credits: number, category?: string, blurb?: string }>} eligible
  * @param {Record<string, unknown>} [answers]
- * @returns {Array<{ code: string, title: string, credits: number, category?: string, blurb?: string, matchScore: number, matchLabel: string, scoreDrivers: string[], matchedSpecialties: string[] }>}
+ * @returns {Array<{ code: string, title: string, credits: number, category?: string, blurb?: string, matchScore: number, matchPercent: number, matchLabel: string, scoreDrivers: string[], matchedSpecialties: string[] }>}
  */
 export function toEligibleSummaries(eligible, answers = {}) {
   return eligible.map((c) => {
@@ -243,11 +261,18 @@ export function toEligibleSummaries(eligible, answers = {}) {
     });
     const detail = scoreCourseForReflectDetail(code, answers);
     const matches = describeCourseMatch(code, answers);
+    const matchPercent = detail.matchPercent ?? matchPercentFromScore(detail.score);
+    const scoreDrivers =
+      detail.drivers.length > 0
+        ? [...detail.drivers, `${matchPercent}% match`]
+        : [`${matchPercent}% match`];
     return {
       ...enriched,
-      matchScore: Number(detail.score.toFixed(2)),
+      // Gemini sees 0–100% here (Rule 9 / Rule 10); ranking still used the 1–5 score.
+      matchScore: matchPercent,
+      matchPercent,
       matchLabel: detail.label,
-      scoreDrivers: detail.drivers,
+      scoreDrivers,
       matchedSpecialties: matches
         .filter((match) => match.rating >= 4)
         .map((match) => `${match.label} (${match.rating}/5)`),
@@ -285,7 +310,7 @@ export function buildRecommendPrompt({ eligible, answers = {} }) {
     ? `Aim for about ${creditHours.target} total credits (stay between ${creditHours.min} and ${creditHours.max} if possible; do not exceed ${creditHours.max} by more than one course).`
     : "Keep the total credits of your recommendations close to the student's stated credit load, without exceeding it by more than one course.";
 
-  return `You are a course recommendation assistant for UNC Charlotte's B.S. Data Science program. You will be given a shortlist of courses the student is CURRENTLY ELIGIBLE to register for — this list has already been filtered for prerequisites and corequisites and ranked by matchScore (1–5, computed in code). Treat it as the complete and only set of valid choices. Each course includes matchLabel ("Strong match" or "Good option"), scoreDrivers (the specific Reflect answers that drove the score), department/topic blurbs, and matchedSpecialties when a rating is 4/5 or 5/5.
+  return `You are a course recommendation assistant for UNC Charlotte's B.S. Data Science program. You will be given a shortlist of courses the student is CURRENTLY ELIGIBLE to register for — this list has already been filtered for prerequisites and corequisites and ranked by matchScore (0–100% match, computed in code). Treat it as the complete and only set of valid choices. Each course includes matchLabel ("Strong match" ≥75% or "Good option" ≥50%), scoreDrivers (the specific Reflect answers that drove the score, ending in the percent match), department/topic blurbs, and matchedSpecialties when a rating is 4/5 or 5/5.
 
 Recommend 3-5 courses from ELIGIBLE_COURSES that best fit the student, in priority order. Prefer higher matchScore / "Strong match" courses first. Prefer "Good option" over weaker entries. Prefer remaining core / computing / capstone courses over gen-ed when matchScore is similar. ${creditLine}
 
@@ -324,18 +349,21 @@ export function buildFallbackRecommendations(
   });
   const picked = pickCoursesBySpecializePreference(scored, answers, 5);
 
-  const recommendations = picked.map(({ course: c, code, score, label, drivers }) => ({
-    code,
-    title: c.title,
-    credits: c.credits,
-    category: c.category,
-    matchPercent: matchPercentFromScore(score),
-    matchLabel: label,
-    reason:
-      drivers.length > 0
-        ? `${drivers.join("; ")}. You're eligible to take it now.`
-        : fallbackReasonForCourse(c, answers),
-  }));
+  const recommendations = picked.map(({ course: c, code, score, matchPercent, label, drivers }) => {
+    const percent = matchPercent ?? matchPercentFromScore(score);
+    return {
+      code,
+      title: c.title,
+      credits: c.credits,
+      category: c.category,
+      matchPercent: percent,
+      matchLabel: label,
+      reason:
+        drivers.length > 0
+          ? `${drivers.join("; ")} → ${percent}% match. You're eligible to take it now.`
+          : fallbackReasonForCourse(c, answers),
+    };
+  });
 
   const defaultSummary =
     recommendations.some((rec) => rec.category === "outside_elective")
@@ -351,6 +379,7 @@ export function buildFallbackRecommendations(
 
 /**
  * Drop extras once the student's credit-load cap is reached.
+ * Still keeps at least MIN_RECOMMENDATIONS when that many were supplied.
  * @param {Array<{ code: string, title: string, credits: number, category?: string, reason: string }>} recommendations
  * @param {Record<string, unknown>} answers
  */
@@ -358,16 +387,18 @@ export function packRecommendationsToLoad(recommendations, answers = {}) {
   const creditHours = parseCreditLoadHours(answers.creditLoad);
   if (!creditHours || !recommendations.length) return recommendations;
 
+  const minKeep = Math.min(MIN_RECOMMENDATIONS, recommendations.length);
   const packed = [];
   let total = 0;
   for (const rec of recommendations) {
     const credits = rec.credits || 3;
     if (packed.length >= 5) break;
-    if (packed.length > 0 && total + credits > creditHours.max) continue;
+    // Always keep the first minKeep options; credit cap applies after that.
+    if (packed.length >= minKeep && total + credits > creditHours.max) continue;
     packed.push(rec);
     total += credits;
   }
-  return packed.length ? packed : recommendations.slice(0, 1);
+  return packed.length ? packed : recommendations.slice(0, minKeep);
 }
 
 /**
@@ -418,9 +449,24 @@ export function finalizeRecommendationsFromText(text, eligible, answers = {}) {
   });
 
   recommendations.sort((a, b) => (b.score || 0) - (a.score || 0));
-  const diversified = pickCoursesBySpecializePreference(recommendations, answers, 5).map(
+  let diversified = pickCoursesBySpecializePreference(recommendations, answers, 5).map(
     ({ score, clusters, ...rest }) => rest
   );
+
+  // Model often returns 1–2 codes; pad from deterministic ranking so the UI
+  // still shows at least MIN_RECOMMENDATIONS when eligibility allows.
+  const minCount = Math.min(MIN_RECOMMENDATIONS, shortlistEligibleCourses(eligible, answers).length);
+  if (diversified.length < minCount) {
+    const fallback = buildFallbackRecommendations(eligible, undefined, answers);
+    const seen = new Set(diversified.map((rec) => normalizeCode(rec.code)));
+    for (const rec of fallback.recommendations) {
+      if (diversified.length >= minCount) break;
+      const code = normalizeCode(rec.code);
+      if (seen.has(code)) continue;
+      seen.add(code);
+      diversified.push(rec);
+    }
+  }
 
   let summary =
     parsed.summary || "Here are eligible courses that fit your preferences.";

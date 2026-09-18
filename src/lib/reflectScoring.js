@@ -3,7 +3,12 @@ import {
   INTEREST_QUESTIONS,
   STYLE_QUESTIONS,
   INDUSTRY_OPTIONS,
+  TOPIC_OPTIONS,
+  SKILL_OPTIONS,
+  DELIVERABLE_OPTIONS,
   INTEREST_ELECTIVE_CLUSTERS,
+  SKILL_COURSE_TAGS,
+  DELIVERABLE_COURSE_TAGS,
   MATH_HEAVY_ELECTIVES,
   RESEARCH_ELECTIVES,
   STUDIO_HANDS_ON_ELECTIVES,
@@ -28,9 +33,16 @@ export const CAREER_BY_INTEREST = {
 
 export const STRONG_MATCH_MIN = 4;
 export const GOOD_OPTION_MIN = 3;
+/** Percent cut points for the Rule 9 display scale (1/5 → 0%, 5/5 → 100%). */
+export const STRONG_MATCH_PERCENT = 75;
+export const GOOD_OPTION_PERCENT = 50;
 export const NEUTRAL_BASE_SCORE = 3;
 export const SCORE_NEAR_TIE = 0.3;
 export const INDUSTRY_BONUS = 0.3;
+export const TOPIC_BONUS = 0.4;
+export const SKILL_WANT_BONUS = 0.35;
+export const SKILL_HAVE_INTRO_NUDGE = -0.25;
+export const DELIVERABLE_BONUS = 0.35;
 
 /**
  * @param {string} code
@@ -108,12 +120,13 @@ function isUpperDivisionElective(code) {
 }
 
 /**
- * @param {number} score
+ * @param {number} score — 1–5 reflect score
  * @returns {"Strong match" | "Good option" | "Weak match"}
  */
 export function matchLabelFromScore(score) {
-  if (score >= STRONG_MATCH_MIN) return "Strong match";
-  if (score >= GOOD_OPTION_MIN) return "Good option";
+  const percent = matchPercentFromScore(score);
+  if (percent >= STRONG_MATCH_PERCENT) return "Strong match";
+  if (percent >= GOOD_OPTION_PERCENT) return "Good option";
   return "Weak match";
 }
 
@@ -124,6 +137,18 @@ export function matchLabelFromScore(score) {
  */
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * Rule 9 — linear rescale of the clamped 1–5 score to a 0–100% match.
+ * 1/5 → 0%, 3/5 → 50%, 5/5 → 100%. Round only here, not on intermediate adjustments.
+ * @param {number} score
+ * @returns {number}
+ */
+export function matchPercentFromScore(score) {
+  if (!Number.isFinite(score)) return 0;
+  const clamped = clamp(score, 1, 5);
+  return Math.round(((clamped - 1) / 4) * 100);
 }
 
 /**
@@ -152,12 +177,72 @@ export function industryMatchForCourse(code, industryKeys = []) {
 }
 
 /**
- * Full reflect score breakdown (Rules 1–9).
+ * Q19 — topics enjoyed that map onto this course's specialty clusters.
+ * @param {string} code
+ * @param {string[]} topicKeys
+ * @returns {{ matched: boolean, labels: string[] }}
+ */
+export function topicMatchForCourse(code, topicKeys = []) {
+  if (!topicKeys.length) return { matched: false, labels: [] };
+  const keys = interestKeysForCourse(code);
+  if (!keys.length) return { matched: false, labels: [] };
+  const labels = [];
+
+  for (const topicKey of topicKeys) {
+    const option = TOPIC_OPTIONS.find((item) => item.key === topicKey);
+    if (!option) continue;
+    if (option.clusters?.some((cluster) => keys.includes(cluster))) {
+      labels.push(option.label);
+    }
+  }
+
+  return { matched: labels.length > 0, labels };
+}
+
+/**
+ * @param {string} code
+ * @param {string} skillKey
+ * @returns {{ teaches: boolean, intro: boolean }}
+ */
+function skillTagForCourse(code, skillKey) {
+  const tag = SKILL_COURSE_TAGS[skillKey];
+  if (!tag) return { teaches: false, intro: false };
+  return {
+    teaches: codeInList(code, tag.courses || []),
+    intro: codeInList(code, tag.intro || []),
+  };
+}
+
+/**
+ * @param {string} code
+ * @param {string[]} deliverableKeys
+ * @returns {{ matched: boolean, labels: string[] }}
+ */
+export function deliverableMatchForCourse(code, deliverableKeys = []) {
+  if (!deliverableKeys.length) return { matched: false, labels: [] };
+  const labels = [];
+  for (const key of deliverableKeys) {
+    const courses = DELIVERABLE_COURSE_TAGS[key];
+    if (!courses?.length) continue;
+    if (codeInList(code, courses)) {
+      const label = DELIVERABLE_OPTIONS.find((opt) => opt.key === key)?.label || key;
+      labels.push(label);
+    }
+  }
+  return { matched: labels.length > 0, labels };
+}
+
+/**
+ * Full reflect score breakdown (Rules 1–9 + Q19–Q22).
  * @param {string} code
  * @param {{
  *   interestRatings?: Record<string, number>,
  *   styleRatings?: Record<string, number>,
  *   industries?: string[],
+ *   topicsEnjoyed?: string[],
+ *   skillsHave?: string[],
+ *   skillsWant?: string[],
+ *   deliverables?: string[],
  * }} answers
  * @returns {{
  *   score: number,
@@ -168,7 +253,15 @@ export function industryMatchForCourse(code, industryKeys = []) {
  * }}
  */
 export function scoreCourseForReflectDetail(code, answers = {}) {
-  const { interestRatings = {}, styleRatings = {}, industries = [] } = answers;
+  const {
+    interestRatings = {},
+    styleRatings = {},
+    industries = [],
+    topicsEnjoyed = [],
+    skillsHave = [],
+    skillsWant = [],
+    deliverables = [],
+  } = answers;
   const clusters = interestKeysForCourse(code);
   const drivers = [];
 
@@ -272,10 +365,56 @@ export function scoreCourseForReflectDetail(code, answers = {}) {
     drivers.push(`industry fit: ${industry.labels.join(", ")} (+${INDUSTRY_BONUS})`);
   }
 
-  // Rule 9 — clamp to 1–5 and label
+  // Q19 — topic enjoyment bonus (flat, once per course if any topic maps)
+  const topic = topicMatchForCourse(code, topicsEnjoyed);
+  if (topic.matched) {
+    adjustment += TOPIC_BONUS;
+    drivers.push(`topic fit: ${topic.labels.join(", ")} (+${TOPIC_BONUS})`);
+  }
+
+  // Q21 — skills wanted: bump courses that teach them (once)
+  const wantLabels = [];
+  for (const skillKey of skillsWant) {
+    const { teaches } = skillTagForCourse(code, skillKey);
+    if (teaches) {
+      const label = SKILL_OPTIONS.find((opt) => opt.key === skillKey)?.label || skillKey;
+      wantLabels.push(label);
+    }
+  }
+  if (wantLabels.length) {
+    adjustment += SKILL_WANT_BONUS;
+    drivers.push(`skill to build: ${wantLabels.join(", ")} (+${SKILL_WANT_BONUS})`);
+  }
+
+  // Q20 — skills already have: small nudge down for intro courses teaching that skill from scratch
+  const haveIntroLabels = [];
+  for (const skillKey of skillsHave) {
+    const { intro } = skillTagForCourse(code, skillKey);
+    if (intro) {
+      const label = SKILL_OPTIONS.find((opt) => opt.key === skillKey)?.label || skillKey;
+      haveIntroLabels.push(label);
+    }
+  }
+  if (haveIntroLabels.length) {
+    adjustment += SKILL_HAVE_INTRO_NUDGE;
+    drivers.push(
+      `already have: ${haveIntroLabels.join(", ")} → intro course nudged (${SKILL_HAVE_INTRO_NUDGE})`
+    );
+  }
+
+  // Q22 — deliverable match bonus (once)
+  const deliverable = deliverableMatchForCourse(code, deliverables);
+  if (deliverable.matched) {
+    adjustment += DELIVERABLE_BONUS;
+    drivers.push(`deliverable fit: ${deliverable.labels.join(", ")} (+${DELIVERABLE_BONUS})`);
+  }
+
+  // Rule 9 — clamp to 1–5, then expose the 0–100% display score
   const score = clamp(baseScore + adjustment, 1, 5);
+  const matchPercent = matchPercentFromScore(score);
   return {
     score,
+    matchPercent,
     label: matchLabelFromScore(score),
     baseScore,
     drivers,
@@ -291,16 +430,6 @@ export function scoreCourseForReflectDetail(code, answers = {}) {
  */
 export function scoreCourseForReflect(code, answers = {}) {
   return scoreCourseForReflectDetail(code, answers).score;
-}
-
-/**
- * Turn a reflect match score (1–5 scale) into a 0–100% badge.
- * @param {number} score
- * @returns {number}
- */
-export function matchPercentFromScore(score) {
-  if (!Number.isFinite(score) || score <= 0) return 0;
-  return Math.round(Math.min(100, Math.max(0, (score / 5) * 100)));
 }
 
 /**
@@ -404,6 +533,12 @@ export function inferCareerTarget(answers = {}) {
  * @param {string} note
  * @param {string} [careerTarget]
  * @param {string[]} [industries]
+ * @param {{
+ *   topicsEnjoyed?: string[],
+ *   skillsHave?: string[],
+ *   skillsWant?: string[],
+ *   deliverables?: string[],
+ * }} [multiSelect]
  */
 export function buildReflectAnswers(
   interestRatings,
@@ -412,7 +547,8 @@ export function buildReflectAnswers(
   creditLoad,
   note,
   careerTarget,
-  industries = []
+  industries = [],
+  multiSelect = {}
 ) {
   return {
     interestRatings: { ...interestRatings },
@@ -422,6 +558,10 @@ export function buildReflectAnswers(
     note: note?.trim() || "",
     careerTarget,
     industries: [...industries],
+    topicsEnjoyed: [...(multiSelect.topicsEnjoyed || [])],
+    skillsHave: [...(multiSelect.skillsHave || [])],
+    skillsWant: [...(multiSelect.skillsWant || [])],
+    deliverables: [...(multiSelect.deliverables || [])],
   };
 }
 
@@ -466,6 +606,34 @@ export function formatReflectAnswersForPrompt(answers = {}) {
       .map((key) => INDUSTRY_OPTIONS.find((opt) => opt.key === key)?.label || key)
       .join(", ");
     lines.push(`Industries of interest: ${labels}`);
+  }
+
+  if (Array.isArray(answers.topicsEnjoyed) && answers.topicsEnjoyed.length) {
+    const labels = answers.topicsEnjoyed
+      .map((key) => TOPIC_OPTIONS.find((opt) => opt.key === key)?.label || key)
+      .join(", ");
+    lines.push(`Topics enjoyed (up to 4): ${labels}`);
+  }
+
+  if (Array.isArray(answers.skillsHave) && answers.skillsHave.length) {
+    const labels = answers.skillsHave
+      .map((key) => SKILL_OPTIONS.find((opt) => opt.key === key)?.label || key)
+      .join(", ");
+    lines.push(`Skills already have: ${labels}`);
+  }
+
+  if (Array.isArray(answers.skillsWant) && answers.skillsWant.length) {
+    const labels = answers.skillsWant
+      .map((key) => SKILL_OPTIONS.find((opt) => opt.key === key)?.label || key)
+      .join(", ");
+    lines.push(`Skills to walk out with (up to 6): ${labels}`);
+  }
+
+  if (Array.isArray(answers.deliverables) && answers.deliverables.length) {
+    const labels = answers.deliverables
+      .map((key) => DELIVERABLE_OPTIONS.find((opt) => opt.key === key)?.label || key)
+      .join(", ");
+    lines.push(`Want to show an employer (up to 3): ${labels}`);
   }
 
   if (answers.note?.trim()) lines.push(`Additional note: ${answers.note.trim()}`);
