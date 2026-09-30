@@ -1,4 +1,4 @@
-import { CAREERS } from "../data/curriculum.js";
+import { CAREERS, COURSE_CAREER_ROLES } from "../data/curriculum.js";
 import { normalizeCode } from "../data/prerequisites.js";
 import { buildTrackedElectives } from "./trackedElectives.js";
 import {
@@ -7,31 +7,63 @@ import {
   inferCareerTarget,
 } from "./reflectScoring.js";
 
+/** A course built for a role outweighs one that only shares a specialty area. */
+export const DIRECT_COURSE_WEIGHT = 2;
+export const INTEREST_COURSE_WEIGHT = 1;
+
+const DIRECT_COURSE_ORDER = new Map(
+  Object.keys(COURSE_CAREER_ROLES).map((code, index) => [code, index])
+);
+
+/** @param {string} code */
+function directCourseRank(code) {
+  return DIRECT_COURSE_ORDER.get(code) ?? Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * @param {string} code normalized course code
+ * @returns {Map<string, { weight: number, interests: string[] }>}
+ */
+function rolesForCourse(code) {
+  /** @type {Map<string, { weight: number, interests: string[] }>} */
+  const roles = new Map();
+
+  for (const key of interestKeysForCourse(code)) {
+    const role = CAREER_BY_INTEREST[key];
+    if (!role) continue;
+    const entry = roles.get(role) || { weight: INTEREST_COURSE_WEIGHT, interests: [] };
+    entry.interests.push(key);
+    roles.set(role, entry);
+  }
+
+  for (const role of COURSE_CAREER_ROLES[code] || []) {
+    const entry = roles.get(role) || { weight: 0, interests: [] };
+    entry.weight = DIRECT_COURSE_WEIGHT;
+    roles.set(role, entry);
+  }
+
+  return roles;
+}
+
 /**
  * @param {string[]} courseCodes
  * @returns {Map<string, { score: number, courses: string[], interests: string[] }>}
+ *   `courses` is ordered strongest match first.
  */
 export function scoreCareersFromCourses(courseCodes = []) {
-  /** @type {Map<string, { score: number, courses: Set<string>, interests: Set<string> }>} */
+  /** @type {Map<string, { score: number, courses: Map<string, number>, interests: Set<string> }>} */
   const byRole = new Map();
 
-  for (const raw of courseCodes) {
-    const code = normalizeCode(raw);
-    if (!code) continue;
-    const keys = interestKeysForCourse(code);
-    for (const key of keys) {
-      const role = CAREER_BY_INTEREST[key];
-      if (!role) continue;
+  for (const code of new Set(courseCodes.map(normalizeCode).filter(Boolean))) {
+    for (const [role, { weight, interests }] of rolesForCourse(code)) {
       const entry = byRole.get(role) || {
         score: 0,
-        courses: new Set(),
+        courses: new Map(),
         interests: new Set(),
       };
-      if (!entry.courses.has(code)) {
-        entry.score += 1;
-        entry.courses.add(code);
-      }
-      entry.interests.add(key);
+      entry.score += weight;
+      entry.courses.set(code, weight);
+      for (const key of interests) entry.interests.add(key);
       byRole.set(role, entry);
     }
   }
@@ -41,7 +73,14 @@ export function scoreCareersFromCourses(courseCodes = []) {
   for (const [role, entry] of byRole) {
     result.set(role, {
       score: entry.score,
-      courses: [...entry.courses].sort(),
+      courses: [...entry.courses]
+        .sort(
+          (a, b) =>
+            b[1] - a[1] ||
+            directCourseRank(a[0]) - directCourseRank(b[0]) ||
+            a[0].localeCompare(b[0])
+        )
+        .map(([code]) => code),
       interests: [...entry.interests].sort(),
     });
   }
@@ -78,44 +117,93 @@ export function collectPlannedCourseCodes({
 }
 
 /**
- * Rank CAREERS by the courses this student will take.
+ * @param {string} code
+ * @param {Record<string, string>} courseTitles
+ */
+function courseLabel(code, courseTitles) {
+  const title = courseTitles[code];
+  return title ? `${title} (${code})` : code;
+}
+
+/**
+ * @param {string[]} takenCourses
+ * @param {string[]} plannedCourses
+ * @param {Record<string, string>} courseTitles
+ */
+function buildMatchReason(takenCourses, plannedCourses, courseTitles) {
+  if (takenCourses.length) {
+    const extra = takenCourses.length - 1;
+    return `You've taken ${courseLabel(takenCourses[0], courseTitles)}${
+      extra ? ` + ${extra} more related class${extra === 1 ? "" : "es"}` : ""
+    }.`;
+  }
+  return plannedCourses.length === 1
+    ? `Fits courses like ${plannedCourses[0]} on your plan.`
+    : `Fits courses like ${plannedCourses.slice(0, 3).join(", ")} on your plan.`;
+}
+
+/**
+ * Rank CAREERS by the classes this student has taken and will take.
  * Falls back to a single inferred career when no course→career signal exists.
  *
  * @param {{
+ *   takenCodes?: string[],
  *   courseCodes?: string[],
  *   recommendations?: Array<{ code?: string }>,
  *   reflectAnswers?: Record<string, unknown>,
+ *   courseTitles?: Record<string, string>,
  *   careers?: typeof CAREERS,
  * }} [options]
- * @returns {Array<typeof CAREERS[number] & { score: number, supportingCourses: string[], matchReason: string }>}
+ * @returns {Array<typeof CAREERS[number] & {
+ *   score: number,
+ *   takenScore: number,
+ *   takenCourses: string[],
+ *   supportingCourses: string[],
+ *   matchReason: string,
+ * }>}
  */
 export function rankCareersForStudent({
+  takenCodes = [],
   courseCodes,
   recommendations = [],
   reflectAnswers = {},
+  courseTitles = {},
   careers = CAREERS,
 } = {}) {
-  const codes =
-    courseCodes ??
-    collectPlannedCourseCodes({ recommendations, reflectAnswers });
+  const taken = [...new Set(takenCodes.map(normalizeCode).filter(Boolean))];
+  const takenSet = new Set(taken);
+  const planned = (
+    courseCodes ?? collectPlannedCourseCodes({ recommendations, reflectAnswers })
+  )
+    .map(normalizeCode)
+    .filter((code) => code && !takenSet.has(code));
 
-  const scores = scoreCareersFromCourses(codes);
+  const takenScores = scoreCareersFromCourses(taken);
+  const plannedScores = scoreCareersFromCourses(planned);
+
   const matched = careers
     .map((career) => {
-      const hit = scores.get(career.role);
-      if (!hit) return null;
+      const fromTaken = takenScores.get(career.role);
+      const fromPlan = plannedScores.get(career.role);
+      if (!fromTaken && !fromPlan) return null;
+      const takenCourses = fromTaken?.courses || [];
+      const supportingCourses = fromPlan?.courses || [];
       return {
         ...career,
-        score: hit.score,
-        supportingCourses: hit.courses,
-        matchReason:
-          hit.courses.length === 1
-            ? `Fits courses like ${hit.courses[0]} on your plan.`
-            : `Fits courses like ${hit.courses.slice(0, 3).join(", ")} on your plan.`,
+        score: (fromTaken?.score || 0) + (fromPlan?.score || 0),
+        takenScore: fromTaken?.score || 0,
+        takenCourses,
+        supportingCourses,
+        matchReason: buildMatchReason(takenCourses, supportingCourses, courseTitles),
       };
     })
     .filter(Boolean)
-    .sort((a, b) => b.score - a.score || a.role.localeCompare(b.role));
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.takenScore - a.takenScore ||
+        a.role.localeCompare(b.role)
+    );
 
   if (matched.length) return matched;
 
@@ -127,9 +215,11 @@ export function rankCareersForStudent({
     {
       ...fallback,
       score: 0,
+      takenScore: 0,
+      takenCourses: [],
       supportingCourses: [],
-      matchReason: codes.length
-        ? "Based on your interests — your planned courses didn't map to a specialty career yet."
+      matchReason: taken.length || planned.length
+        ? "Based on your interests — your courses didn't map to a specialty career yet."
         : "Get course recommendations first to tailor careers to classes you'll take.",
     },
   ];

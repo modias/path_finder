@@ -224,6 +224,12 @@ export const CAREERS = [
     skills: ["Python", "ML models", "Statistics"],
     salary: "$75,000 – $105,000",
     employers: "Insurance carriers, healthcare systems, tech firms" },
+  { role: "Machine learning engineer",
+    oneLiner: "Takes a model out of the notebook and keeps it working in the real world.",
+    does: "Trains, tunes, and deploys machine learning models, then monitors them so predictions stay accurate as the data underneath them changes.",
+    skills: ["Python", "scikit-learn / PyTorch", "Model deployment"],
+    salary: "$80,000 – $110,000",
+    employers: "Tech firms, banks, healthcare and insurance companies" },
   { role: "Data ethics & policy analyst",
     oneLiner: "Asks the question everyone else forgot to ask.",
     does: "Reviews how a system uses data, flags where it could discriminate or mislead, and writes the guardrails before something goes wrong.",
@@ -237,5 +243,22 @@ export const CAREERS = [
     salary: "$60,000 – $85,000",
     employers: "Fintech companies, e-commerce, software firms" },
 ];
+
+/**
+ * Courses that prepare students for a specific role. These count more than the
+ * broad specialty-area mapping in reflectScoring's CAREER_BY_INTEREST.
+ * Roles must match CAREERS[].role exactly.
+ */
+export const COURSE_CAREER_ROLES = {
+  "ITCS 3156": ["Machine learning engineer", "Data scientist"],
+  "ITCS 3153": ["Machine learning engineer"],
+  "ITCS 3162": ["Data scientist"],
+  "ITCS 3160": ["Data engineer"],
+  "ITSC 2214": ["Software developer"],
+  "STAT 1222": ["Data analyst"],
+  "STAT 3128": ["Data scientist"],
+  "STAT 3160": ["Data scientist"],
+  "ITSC 3688": ["Data ethics & policy analyst"],
+};
 
 export const STEP_LABELS = ["Reflect", "Your plan", "Explore courses", "Meet the careers"];

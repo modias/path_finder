@@ -1,5 +1,6 @@
 import { COURSE_HISTORY } from "../data/curriculum.js";
-import { normalizeCode } from "../data/prerequisites.js";
+import { COURSES } from "../data/courseCatalog.js";
+import { courseKey, normalizeCode } from "../data/prerequisites.js";
 
 /**
  * @typedef {{ completed: string[], inProgress: string[] }} StudentRecord
@@ -34,4 +35,23 @@ export function buildStudentRecord() {
     completed: [...completed].sort(),
     inProgress: [...inProgress].sort(),
   };
+}
+
+/**
+ * Course code → title for every course in the student's history.
+ * Catalog titles win over the history mock's names, which can be stale.
+ * @returns {Record<string, string>}
+ */
+export function courseHistoryTitles() {
+  const catalogTitles = new Map(
+    COURSES.map((course) => [courseKey(course.subject, course.number), course.title])
+  );
+  return Object.fromEntries(
+    COURSE_HISTORY.flatMap((term) =>
+      term.courses.map((course) => {
+        const code = normalizeCode(course.code);
+        return [code, catalogTitles.get(code) || course.title];
+      })
+    )
+  );
 }

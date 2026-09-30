@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Sparkles, ArrowRight, ArrowLeft, Check,
   BarChart3, Database, Cpu, LineChart, ShieldCheck, Users, Star, ChevronDown,
-  Home, Heart, Compass,
+  Home, Heart, Compass, BrainCircuit,
 } from "lucide-react";
 import RatingRow from "./components/RatingRow";
 import {
@@ -17,6 +17,7 @@ import { apiFetch } from "./lib/api";
 import { friendlyApiError, parseJsonResponse } from "./lib/apiResponse";
 import { buildReflectAnswers, inferCareerTarget } from "./lib/reflectScoring";
 import { rankCareersForStudent } from "./lib/careerFromCourses";
+import { buildStudentRecord, courseHistoryTitles } from "./lib/studentRecord";
 import AdvisorChat from "./components/AdvisorChat";
 import CatalogBrowser from "./components/CatalogBrowser";
 import ElectivesPanel from "./components/ElectivesPanel";
@@ -41,16 +42,25 @@ const SUPPORT_TINT = "#EEF0EA";
 const DEFAULT_REGISTER_TERM = REFLECT_TERM_OPTIONS[0] || "";
 const DEFAULT_CREDIT_LOAD = REFLECT_CREDIT_LOAD_OPTIONS[1] || "";
 
-const CAREER_META = [
-  { icon: BarChart3, photo: "https://i.pravatar.cc/400?img=47" },
-  { icon: Database, photo: "https://i.pravatar.cc/400?img=32" },
-  { icon: Cpu, photo: "https://i.pravatar.cc/400?img=13" },
-  { icon: LineChart, photo: "https://i.pravatar.cc/400?img=5" },
-  { icon: ShieldCheck, photo: "https://i.pravatar.cc/400?img=25" },
-  { icon: Users, photo: "https://i.pravatar.cc/400?img=48" },
-];
+const CAREER_META = {
+  "Data analyst": { icon: BarChart3, photo: "https://i.pravatar.cc/400?img=47" },
+  "Data engineer": { icon: Database, photo: "https://i.pravatar.cc/400?img=32" },
+  "Software developer": { icon: Cpu, photo: "https://i.pravatar.cc/400?img=13" },
+  "Data scientist": { icon: LineChart, photo: "https://i.pravatar.cc/400?img=5" },
+  "Machine learning engineer": { icon: BrainCircuit, photo: "https://i.pravatar.cc/400?img=12" },
+  "Data ethics & policy analyst": { icon: ShieldCheck, photo: "https://i.pravatar.cc/400?img=25" },
+  "UX / product analyst": { icon: Users, photo: "https://i.pravatar.cc/400?img=48" },
+};
 
-const CAREERS = CAREER_DATA.map((career, i) => ({ ...career, ...CAREER_META[i] }));
+const CAREERS = CAREER_DATA.map((career) => ({
+  ...career,
+  icon: BarChart3,
+  ...CAREER_META[career.role],
+}));
+
+const STUDENT_RECORD = buildStudentRecord();
+const TAKEN_CODES = [...STUDENT_RECORD.completed, ...STUDENT_RECORD.inProgress];
+const COURSE_TITLES = courseHistoryTitles();
 
 function Stepper({ step, setStep }) {
   const steps = ["Reflect", "Your plan", "Explore courses", "Meet the careers"];
@@ -427,6 +437,29 @@ function RoadmapStep({ reflectAnswers, onAskAdvisor }) {
   );
 }
 
+function CareerCourseChips({ label, codes }) {
+  if (!codes?.length) return null;
+  return (
+    <div className="mb-2.5">
+      <p className="text-[9px] uppercase tracking-wide mb-1" style={{ color: "#9FB5AA" }}>
+        {label}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {codes.map((code) => (
+          <span
+            key={code}
+            title={COURSE_TITLES[code]}
+            className="text-[10px] px-2 py-0.5 rounded-full"
+            style={{ background: "rgba(255,255,255,0.08)", color: "#D7E4DC", border: "1px solid rgba(255,255,255,0.16)" }}
+          >
+            {code}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CareerCard({ career, flipped, onToggle }) {
   const Icon = career.icon;
   return (
@@ -463,24 +496,8 @@ function CareerCard({ career, flipped, onToggle }) {
           <h4 className="text-sm font-semibold mb-2" style={{ color: GOLD, fontFamily: "Georgia, serif" }}>{career.role}</h4>
           <p className="text-[11px] leading-relaxed mb-2.5" style={{ color: "#E4EEE8" }}>{career.does}</p>
 
-          {career.supportingCourses?.length > 0 && (
-            <div className="mb-2.5">
-              <p className="text-[9px] uppercase tracking-wide mb-1" style={{ color: "#9FB5AA" }}>
-                From your planned courses
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {career.supportingCourses.map((code) => (
-                  <span
-                    key={code}
-                    className="text-[10px] px-2 py-0.5 rounded-full"
-                    style={{ background: "rgba(255,255,255,0.08)", color: "#D7E4DC", border: "1px solid rgba(255,255,255,0.16)" }}
-                  >
-                    {code}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          <CareerCourseChips label="From classes you've taken" codes={career.takenCourses} />
+          <CareerCourseChips label="From your planned courses" codes={career.supportingCourses} />
 
           <div className="flex flex-wrap gap-1.5 mb-2.5">
             {career.skills.map((s) => (
@@ -511,18 +528,29 @@ function CareerCard({ career, flipped, onToggle }) {
 
 function CareersStep({ flipped, toggleFlip, recommendations, reflectAnswers }) {
   const matchedCareers = useMemo(() => {
-    const ranked = rankCareersForStudent({ recommendations, reflectAnswers });
+    const ranked = rankCareersForStudent({
+      takenCodes: TAKEN_CODES,
+      recommendations,
+      reflectAnswers,
+      courseTitles: COURSE_TITLES,
+    });
     return ranked.map((career) => {
       const meta = CAREERS.find((entry) => entry.role === career.role);
-      return meta ? { ...career, ...meta } : career;
+      return meta ? { ...meta, ...career } : career;
     });
   }, [recommendations, reflectAnswers]);
 
+  const takenCodes = useMemo(
+    () => [...new Set(matchedCareers.flatMap((career) => career.takenCourses || []))].sort(),
+    [matchedCareers]
+  );
   const plannedCodes = useMemo(
     () =>
       [...new Set(matchedCareers.flatMap((career) => career.supportingCourses || []))].sort(),
     [matchedCareers]
   );
+  const listCodes = (codes) =>
+    `${codes.slice(0, 4).join(", ")}${codes.length > 4 ? ", …" : ""}`;
 
   return (
     <div>
@@ -531,8 +559,8 @@ function CareersStep({ flipped, toggleFlip, recommendations, reflectAnswers }) {
         Where your courses lead.
       </h1>
       <p className="text-base mb-8 max-w-xl" style={{ color: ON_DARK_MUTED }}>
-          {plannedCodes.length
-          ? `These roles fit the classes on your plan (${plannedCodes.slice(0, 4).join(", ")}${plannedCodes.length > 4 ? ", …" : ""}). Flip a card for what they do, pay, and who hires for it.`
+        {takenCodes.length || plannedCodes.length
+          ? `These roles build on the classes you've taken${takenCodes.length ? ` (${listCodes(takenCodes)})` : ""}${plannedCodes.length ? ` and the ones on your plan (${listCodes(plannedCodes)})` : ""}. Strongest match first — flip a card for what they do, pay, and who hires for it.`
           : "These roles are inferred from your interests for now. Get course recommendations on Reflect to tailor careers to classes you'll take."}
       </p>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-4">
@@ -637,7 +665,7 @@ export default function App() {
   return (
     <div className="w-full min-h-screen" style={{ background: PAGE_BG }}>
       <style>{`
-        .flip-card { perspective: 1200px; height: 300px; cursor: pointer; }
+        .flip-card { perspective: 1200px; height: 340px; cursor: pointer; }
         .flip-inner { position: relative; width: 100%; height: 100%; transition: transform 0.5s; transform-style: preserve-3d; box-shadow: 0 6px 16px rgba(0,0,0,0.18); border-radius: 16px; }
         .flip-inner.is-flipped { transform: rotateY(180deg); }
         .flip-face { position: absolute; inset: 0; backface-visibility: hidden; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; overflow: hidden; }
