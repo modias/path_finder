@@ -4,7 +4,6 @@ import { TRACKED_ELECTIVE_CODES } from "../data/curriculum.js";
 import { normalizeCode } from "../data/prerequisites.js";
 import { getEligibleCourses } from "./eligibility.js";
 import {
-  scoreCourseForReflect,
   scoreCourseForReflectDetail,
   GOOD_OPTION_MIN,
   GOOD_OPTION_PERCENT,
@@ -47,6 +46,29 @@ export function getElectiveStatus(code, record) {
 }
 
 /**
+ * Whether the student has answered anything on Reflect that the scorer reads.
+ * @param {{
+ *   interestRatings?: Record<string, number>,
+ *   styleRatings?: Record<string, number>,
+ *   industries?: string[],
+ *   topicsEnjoyed?: string[],
+ *   skillsHave?: string[],
+ *   skillsWant?: string[],
+ *   deliverables?: string[],
+ * }} [reflectAnswers]
+ * @returns {boolean}
+ */
+export function hasReflectAnswers(reflectAnswers = {}) {
+  const ratings = [reflectAnswers.interestRatings, reflectAnswers.styleRatings];
+  if (ratings.some((map) => map && Object.values(map).some((value) => value != null))) return true;
+  return ["industries", "topicsEnjoyed", "skillsHave", "skillsWant", "deliverables"].some(
+    (key) => Array.isArray(reflectAnswers[key]) && reflectAnswers[key].length > 0
+  );
+}
+
+/**
+ * Eligible, clears the Good option threshold, and the score was actually moved
+ * by the student's answers — a neutral default score never earns the badge.
  * @param {string} code
  * @param {{ interestRatings?: Record<string, number>, styleRatings?: Record<string, number> }} reflectAnswers
  * @param {Set<string>} eligibleCodes
@@ -55,7 +77,8 @@ export function getElectiveStatus(code, record) {
 export function isRecommendedElective(code, reflectAnswers, eligibleCodes) {
   const normalized = normalizeCode(code);
   if (!eligibleCodes.has(normalized)) return false;
-  return scoreCourseForReflect(code, reflectAnswers) >= ELECTIVE_RECOMMEND_THRESHOLD;
+  const detail = scoreCourseForReflectDetail(code, reflectAnswers);
+  return detail.drivers.length > 0 && detail.score >= ELECTIVE_RECOMMEND_THRESHOLD;
 }
 
 /**
@@ -83,11 +106,31 @@ export function lookupTrackedElectiveCatalog(code) {
 }
 
 /**
+ * @typedef {{ code: string, reason?: string, syllabusGrounded?: boolean }} RecommendationResult
+ */
+
+/**
+ * Syllabus-grounded reason for `code` from this student's recommendation run, if any.
+ * @param {string} code
+ * @param {RecommendationResult[]} [recommendations]
+ * @returns {string | null}
+ */
+export function groundedReasonFor(code, recommendations = []) {
+  const normalized = normalizeCode(code);
+  const match = recommendations.find(
+    (rec) => rec?.syllabusGrounded && rec.code && normalizeCode(rec.code) === normalized
+  );
+  const reason = typeof match?.reason === "string" ? match.reason.trim() : "";
+  return reason || null;
+}
+
+/**
  * @param {string} code
  * @param {{ interestRatings?: Record<string, number>, styleRatings?: Record<string, number> }} reflectAnswers
  * @param {{
  *   record?: { completed: string[], inProgress: string[] },
  *   eligibleCodes?: Set<string>,
+ *   recommendations?: RecommendationResult[],
  * }} [opts]
  */
 function buildElectiveCard(code, reflectAnswers, opts = {}) {
@@ -104,16 +147,22 @@ function buildElectiveCard(code, reflectAnswers, opts = {}) {
   const normalized = normalizeCode(code);
   const status = getElectiveStatus(code, record);
   const detail = scoreCourseForReflectDetail(code, reflectAnswers);
+  const name = catalog?.name || normalized;
+  const blurb = catalog?.blurb || "";
+  const groundedReason = groundedReasonFor(normalized, opts.recommendations);
 
   return {
     code: normalized,
-    name: catalog?.name || normalized,
+    name,
     hrs: catalog?.hrs ?? 3,
-    blurb: catalog?.blurb || "",
+    blurb,
+    description: groundedReason || blurb || name,
+    descriptionSource: groundedReason ? "syllabus" : "catalog",
     status,
     recommended: isRecommendedElective(code, reflectAnswers, eligibleCodes),
     matchPercent: detail.matchPercent,
     matchLabel: detail.label,
+    personalized: detail.drivers.length > 0,
   };
 }
 
@@ -138,29 +187,36 @@ export function buildTrackedElectives(reflectAnswers = {}) {
  * Build elective cards for an explicit list of codes (used after refresh swaps).
  * @param {string[]} codes
  * @param {{ interestRatings?: Record<string, number>, styleRatings?: Record<string, number> }} reflectAnswers
+ * @param {{ record?: { completed: string[], inProgress: string[] }, recommendations?: RecommendationResult[] }} [opts]
  */
-export function buildElectivesForCodes(codes, reflectAnswers = {}) {
-  const record = buildStudentRecord();
+export function buildElectivesForCodes(codes, reflectAnswers = {}, opts = {}) {
+  const record = opts.record ?? buildStudentRecord();
   const eligibleCodes = new Set(
     getEligibleCourses(COURSES, record).map((course) =>
       normalizeCode(`${course.subject} ${course.number}`)
     )
   );
 
-  return codes.map((code) => buildElectiveCard(code, reflectAnswers, { record, eligibleCodes }));
+  return codes.map((code) =>
+    buildElectiveCard(code, reflectAnswers, {
+      record,
+      eligibleCodes,
+      recommendations: opts.recommendations,
+    })
+  );
 }
 
 /**
- * Next best outside elective not already on screen (and not completed).
- * Prefers higher match %, then eligibility/recommended, then code order.
+ * Non-completed outside electives ranked for this student: higher match % first,
+ * then courses the student's answers actually scored, then recommended, then code.
  *
  * @param {{
  *   excludeCodes?: string[],
  *   reflectAnswers?: { interestRatings?: Record<string, number>, styleRatings?: Record<string, number> },
  * }} [opts]
- * @returns {ReturnType<typeof buildElectiveCard> | null}
+ * @returns {Array<ReturnType<typeof buildElectiveCard>>}
  */
-export function pickAlternateElective({ excludeCodes = [], reflectAnswers = {} } = {}) {
+export function rankOutsideElectives({ excludeCodes = [], reflectAnswers = {} } = {}) {
   const record = buildStudentRecord();
   const eligibleCodes = new Set(
     getEligibleCourses(COURSES, record).map((course) =>
@@ -169,7 +225,7 @@ export function pickAlternateElective({ excludeCodes = [], reflectAnswers = {} }
   );
   const excluded = new Set(excludeCodes.map((code) => normalizeCode(code)));
 
-  const candidates = listOutsideElectiveCodes()
+  return listOutsideElectiveCodes()
     .filter((code) => !excluded.has(code))
     .map((code) => buildElectiveCard(code, reflectAnswers, { record, eligibleCodes }))
     .filter((course) => course.status !== "completed")
@@ -178,24 +234,43 @@ export function pickAlternateElective({ excludeCodes = [], reflectAnswers = {} }
       const bPct = b.matchPercent ?? -1;
       if (aPct !== bPct) return bPct - aPct;
 
+      const aSignal = a.personalized ? 0 : 1;
+      const bSignal = b.personalized ? 0 : 1;
+      if (aSignal !== bSignal) return aSignal - bSignal;
+
       const aRec = a.recommended ? 0 : 1;
       const bRec = b.recommended ? 0 : 1;
       if (aRec !== bRec) return aRec - bRec;
 
       return a.code.localeCompare(b.code);
     });
-
-  return candidates[0] ?? null;
 }
 
 /**
- * Starting list for ElectivesPanel: non-completed tracked electives, then
- * best outside alternates until MAX_DISPLAYED_ELECTIVES.
+ * Next best outside elective not already on screen (and not completed).
+ *
+ * @param {Parameters<typeof rankOutsideElectives>[0]} [opts]
+ * @returns {ReturnType<typeof buildElectiveCard> | null}
+ */
+export function pickAlternateElective(opts = {}) {
+  return rankOutsideElectives(opts)[0] ?? null;
+}
+
+/**
+ * Starting list for ElectivesPanel. Once the student has answered Reflect, it's
+ * their top-ranked electives by match %. Before that, it falls back to the
+ * plan's tracked electives, then best outside alternates.
  *
  * @param {{ interestRatings?: Record<string, number>, styleRatings?: Record<string, number> }} [reflectAnswers]
  * @returns {string[]}
  */
 export function buildInitialElectiveCodes(reflectAnswers = {}) {
+  if (hasReflectAnswers(reflectAnswers)) {
+    return rankOutsideElectives({ reflectAnswers })
+      .slice(0, MAX_DISPLAYED_ELECTIVES)
+      .map((course) => course.code);
+  }
+
   const tracked = buildTrackedElectives(reflectAnswers)
     .filter((course) => course.status !== "completed")
     .map((course) => course.code);

@@ -17,8 +17,6 @@ for (const course of raw.mathStatCognates?.courses ?? []) {
   }
 }
 
-export const CCI_TOPIC_POOL_META = raw._meta;
-
 /**
  * Look up a CCI catalog reference entry for topic-matching (not eligibility).
  * @param {string} code

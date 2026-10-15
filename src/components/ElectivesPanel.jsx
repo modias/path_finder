@@ -5,6 +5,7 @@ import {
   MAX_DISPLAYED_ELECTIVES,
   buildElectivesForCodes,
   buildInitialElectiveCodes,
+  hasReflectAnswers,
   pickAlternateElective,
 } from "../lib/trackedElectives";
 import { normalizeCode } from "../data/prerequisites";
@@ -36,13 +37,13 @@ function sortElectives(electives) {
       const bRec = b.recommended ? 0 : 1;
       if (aRec !== bRec) return aRec - bRec;
 
-      const aStatus = STATUS_ORDER[a.status] ?? 2;
-      const bStatus = STATUS_ORDER[b.status] ?? 2;
-      if (aStatus !== bStatus) return aStatus - bStatus;
-
       const aPct = a.matchPercent ?? -1;
       const bPct = b.matchPercent ?? -1;
       if (aPct !== bPct) return bPct - aPct;
+
+      const aStatus = STATUS_ORDER[a.status] ?? 2;
+      const bStatus = STATUS_ORDER[b.status] ?? 2;
+      if (aStatus !== bStatus) return aStatus - bStatus;
 
       return a.code.localeCompare(b.code);
     })
@@ -97,7 +98,7 @@ function ElectiveCard({ course, onRefresh, canRefresh }) {
         {course.name}
       </h4>
       <p className="text-xs leading-relaxed" style={{ color: MUTED }}>
-        {course.blurb}
+        {course.description || course.blurb}
       </p>
       {course.recommended && (
         <p className="text-[11px] font-semibold mt-2 flex items-center gap-1" style={{ color: GOLD_DEEP }}>
@@ -119,19 +120,24 @@ function ElectiveCard({ course, onRefresh, canRefresh }) {
 }
 
 /**
- * Electives section for the plan step — tracked electives with status from the
- * student record, catalog metadata from courseCatalog.js, and badges gated on
- * both reflect scores and real eligibility. Shows up to four cards; weak matches
- * can be swapped for another outside elective.
+ * Electives section for the plan step — the student's top electives by Reflect
+ * match (or the plan's tracked electives before they answer), with status from
+ * the student record, catalog metadata from courseCatalog.js, and badges gated
+ * on both reflect scores and real eligibility. Shows up to four cards; weak
+ * matches can be swapped for another outside elective. Descriptions use the
+ * syllabus-grounded reason from `recommendations` when one exists for a course,
+ * otherwise the catalog blurb.
  */
-export default function ElectivesPanel({ reflectAnswers = {} }) {
+export default function ElectivesPanel({ reflectAnswers = {}, recommendations = [] }) {
+  const personalized = hasReflectAnswers(reflectAnswers);
   const [displayedCodes, setDisplayedCodes] = useState(() =>
     buildInitialElectiveCodes(reflectAnswers)
   );
 
   const orderedElectives = useMemo(
-    () => sortElectives(buildElectivesForCodes(displayedCodes, reflectAnswers)),
-    [displayedCodes, reflectAnswers]
+    () =>
+      sortElectives(buildElectivesForCodes(displayedCodes, reflectAnswers, { recommendations })),
+    [displayedCodes, reflectAnswers, recommendations]
   );
 
   const hasAlternate = useMemo(
@@ -167,7 +173,10 @@ export default function ElectivesPanel({ reflectAnswers = {} }) {
         </h3>
       </div>
       <p className="text-sm mb-4" style={{ color: MUTED }}>
-        Up to four electives from your plan and the catalog. &ldquo;Recommended for you&rdquo; only appears when you&apos;re currently eligible and your ratings match. Completed courses are hidden. Weak matches can be swapped for another elective.
+        {personalized
+          ? "Your four best-matching electives, ranked by your Reflect answers."
+          : "Electives from your plan. Answer the Reflect questions to rank these by your interests."}{" "}
+        &ldquo;Recommended for you&rdquo; only appears when you&apos;re currently eligible and your answers point to the course. Completed courses are hidden. Weak matches can be swapped for another elective.
       </p>
 
       <div className="grid sm:grid-cols-2 gap-4">

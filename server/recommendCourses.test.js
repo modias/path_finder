@@ -1,16 +1,23 @@
-import { describe, it } from "node:test";
+import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
   buildRecommendPrompt,
   finalizeRecommendationsFromText,
   isBlockedFromRecommendation,
+  markSyllabusGrounded,
   MIN_RECOMMENDATIONS,
   packRecommendationsToLoad,
   parseCreditLoadHours,
   recommendCourses,
   shortlistEligibleCourses,
 } from "./recommendCourses.js";
-import { filterToEligibleCodes } from "../src/lib/eligibility.js";
+import { filterToEligibleCodes, getEligibleCourses } from "../src/lib/eligibility.js";
+import { COURSES } from "../src/data/courseCatalog.js";
+import { buildStudentRecord } from "../src/lib/studentRecord.js";
+import { scoreCourseForReflect } from "../src/lib/reflectScoring.js";
 
 const eligible = [
   {
@@ -235,6 +242,7 @@ describe("recommendCourses", () => {
       assert.ok(typeof rec.code === "string" && rec.code.length > 0);
       assert.ok(typeof rec.reason === "string" && rec.reason.length > 0);
       assert.equal(isBlockedFromRecommendation(rec.code), false);
+      assert.equal(rec.syllabusGrounded, false);
     }
   });
 });
@@ -349,6 +357,175 @@ describe("shortlistEligibleCourses", () => {
     const electives = list.filter((c) => c.category === "outside_elective");
     assert.ok(electives.length >= MIN_RECOMMENDATIONS);
     assert.ok(!list.slice(0, MIN_RECOMMENDATIONS).some((c) => c.category === "gen_ed"));
+  });
+});
+
+describe("syllabus explanations are additive", () => {
+  const previousPath = process.env.SYLLABUS_TEXT_PATH;
+
+  afterEach(() => {
+    if (previousPath === undefined) delete process.env.SYLLABUS_TEXT_PATH;
+    else process.env.SYLLABUS_TEXT_PATH = previousPath;
+  });
+
+  it("keeps score, rank, and selection identical whether or not syllabusText.json exists", async () => {
+    const answers = { interestRatings: { ai: 5 } };
+    const marker = "UNIQUE_SYLLABUS_MARKER uninformed search and constraint satisfaction";
+    const record = buildStudentRecord();
+    const eligible = getEligibleCourses(COURSES, record);
+    const rankedCodes = () =>
+      shortlistEligibleCourses(eligible, answers).map((course) => `${course.subject} ${course.number}`);
+    const signature = (result) =>
+      result.recommendations.map((rec) => ({
+        code: rec.code,
+        matchPercent: rec.matchPercent,
+        matchLabel: rec.matchLabel,
+        credits: rec.credits,
+        category: rec.category,
+      }));
+
+    function makeGenAI() {
+      const calls = [];
+      return {
+        calls,
+        getGenerativeModel(config) {
+          return {
+            generateContent(prompt) {
+              const userPrompt = String(prompt ?? "");
+              const systemInstruction = String(config?.systemInstruction || "");
+              calls.push({ userPrompt, systemInstruction });
+              if (userPrompt.includes("SYLLABUS_EXPLANATION_STEP")) {
+                const json = userPrompt.slice(
+                  userPrompt.indexOf("SELECTED_COURSES:\n") + "SELECTED_COURSES:\n".length
+                );
+                const payload = JSON.parse(json);
+                return Promise.resolve({
+                  response: {
+                    text: () =>
+                      JSON.stringify({
+                        courses: [
+                          { code: "FAKE 0000", reason: "Should not replace the selected list." },
+                          ...payload.map((course) => ({
+                            code: course.code,
+                            reason: `Covers ${course.syllabusText}`,
+                          })),
+                        ],
+                      }),
+                  },
+                });
+              }
+              return Promise.resolve({
+                response: {
+                  text: () =>
+                    JSON.stringify({
+                      summary: "Ranked options.",
+                      courses: [
+                        { code: "ITCS 4123", reason: "Title-only guess about visualization." },
+                        { code: "FAKE 9999", reason: "Invented." },
+                      ],
+                    }),
+                },
+              });
+            },
+          };
+        },
+      };
+    }
+
+    process.env.SYLLABUS_TEXT_PATH = path.join(os.tmpdir(), "no-such-syllabusText.json");
+    const scoreBefore = scoreCourseForReflect("ITCS 4123", answers);
+    const rankBefore = rankedCodes();
+    const withoutClient = makeGenAI();
+    const without = await recommendCourses(withoutClient, { answers });
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "syllabus-select-"));
+    const filePath = path.join(dir, "syllabusText.json");
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify(
+        without.recommendations.map((rec) => ({
+          code: rec.code,
+          text: `${marker} for ${rec.code}.`,
+        }))
+      )
+    );
+    process.env.SYLLABUS_TEXT_PATH = filePath;
+
+    const scoreAfter = scoreCourseForReflect("ITCS 4123", answers);
+    const rankAfter = rankedCodes();
+    const withClient = makeGenAI();
+    const withSyllabus = await recommendCourses(withClient, { answers });
+
+    assert.equal(scoreBefore, scoreAfter);
+    assert.deepEqual(rankBefore, rankAfter);
+    assert.deepEqual(signature(withSyllabus), signature(without));
+    assert.deepEqual(
+      withSyllabus.recommendations.map((rec) => rec.code),
+      without.recommendations.map((rec) => rec.code)
+    );
+
+    assert.equal(withoutClient.calls.length, 1);
+    assert.equal(withoutClient.calls[0].userPrompt.includes("SYLLABUS_EXPLANATION_STEP"), false);
+    assert.equal(withoutClient.calls[0].systemInstruction.includes(marker), false);
+
+    assert.equal(withClient.calls.length, 2);
+    assert.equal(withClient.calls[0].userPrompt.includes("SYLLABUS_EXPLANATION_STEP"), false);
+    assert.equal(withClient.calls[0].systemInstruction.includes(marker), false);
+    assert.equal(withClient.calls[0].userPrompt.includes(marker), false);
+    assert.equal(withClient.calls[1].userPrompt.includes("SYLLABUS_EXPLANATION_STEP"), true);
+    assert.equal(withClient.calls[1].userPrompt.includes(marker), true);
+    assert.match(withClient.calls[1].userPrompt, /scoreTrail/);
+
+    for (const rec of withSyllabus.recommendations) {
+      assert.match(rec.reason, /UNIQUE_SYLLABUS_MARKER/);
+      assert.equal(rec.reason.includes("FAKE 0000"), false);
+      assert.equal(rec.syllabusGrounded, true);
+    }
+    for (const rec of without.recommendations) {
+      assert.equal(rec.reason.includes("UNIQUE_SYLLABUS_MARKER"), false);
+      assert.equal(rec.syllabusGrounded, false);
+    }
+  });
+
+  it("marks only courses whose reason was rewritten from an indexed syllabus", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "syllabus-mark-"));
+    const filePath = path.join(dir, "syllabusText.json");
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify([
+        { code: "ITCS 4123", text: "Visualization syllabus." },
+        { code: "ITCS 3153", text: "AI syllabus." },
+      ])
+    );
+    process.env.SYLLABUS_TEXT_PATH = filePath;
+
+    const before = {
+      summary: "s",
+      recommendations: [
+        { code: "ITCS 4123", reason: "score trail A" },
+        { code: "ITCS 3153", reason: "score trail B" },
+        { code: "ITIS 3200", reason: "score trail C" },
+      ],
+    };
+    const after = {
+      ...before,
+      recommendations: [
+        { code: "ITCS 4123", reason: "Grounded in the visualization syllabus." },
+        { code: "ITCS 3153", reason: "score trail B" },
+        { code: "ITIS 3200", reason: "Changed but no syllabus is indexed." },
+      ],
+    };
+
+    const marked = markSyllabusGrounded(before, after);
+    assert.deepEqual(
+      marked.recommendations.map((rec) => [rec.code, rec.syllabusGrounded]),
+      [
+        ["ITCS 4123", true],
+        ["ITCS 3153", false],
+        ["ITIS 3200", false],
+      ]
+    );
+    assert.equal(marked.summary, "s");
   });
 });
 

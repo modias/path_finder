@@ -1,7 +1,6 @@
 import { Loader2, Sparkles, BookOpen } from "lucide-react";
 
 const INK = "#0B2E22";
-const GOLD = "#B3A369";
 const GOLD_DEEP = "#8C7F4B";
 const GREEN = "#1F7A54";
 const SURFACE = "#FFFFFF";
@@ -65,9 +64,16 @@ export function RecommendationCard({ course }) {
  *   error?: string | null,
  *   summary?: string | null,
  *   recommendations?: Recommendation[],
+ *   className?: string,
  * }} props
  */
-export default function CourseAdvisor({ loading, error, summary, recommendations = [] }) {
+export default function CourseAdvisor({
+  loading,
+  error,
+  summary,
+  recommendations = [],
+  className = "mt-8",
+}) {
   if (!loading && !error && !summary && recommendations.length === 0) {
     return null;
   }
@@ -75,7 +81,7 @@ export default function CourseAdvisor({ loading, error, summary, recommendations
   return (
     <div
       id="course-recommendations"
-      className="rounded-2xl p-6 mt-8"
+      className={`rounded-2xl p-6 ${className}`}
       style={{ background: SURFACE, border: "1px solid #E4E1D4" }}
     >
       <div className="flex items-center gap-2 mb-4">

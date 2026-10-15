@@ -117,9 +117,6 @@ export const VERIFIED_NO_PREREQ = new Set([
   "ITIS 4350",
 ]);
 
-/** @deprecated Use hasVerifiedRules — unverified courses are ineligible, not "free to take". */
-export const DEFAULT_RULES = { prereqs: [], coreqs: [] };
-
 /**
  * @param {string} code
  * @returns {boolean}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { AlertCircle, AlertTriangle, ArrowLeft, BookOpen, ChevronDown, Home, Settings, Trash2 } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { AlertCircle, AlertTriangle, BookOpen, ChevronDown, Settings, Trash2 } from "lucide-react";
 import {
   BROWSE_BUCKETS,
   CATEGORY_META,
@@ -10,7 +10,6 @@ import {
 import { COURSE_HISTORY } from "../data/curriculum";
 import { useSchedule } from "../data/schedule";
 
-const PAGE_BG = "#00543C";
 const INK = "#0B2E22";
 const GOLD = "#B3A369";
 const GREEN = "#1F7A54";
@@ -565,43 +564,6 @@ export function RegistrationPanel({ showHeading = true, showCatalogLink = true }
             );
           })}
         </div>
-      </div>
-    </div>
-  );
-}
-
-export default function Registration() {
-  const navigate = useNavigate();
-  return (
-    <div className="w-full min-h-screen" style={{ background: PAGE_BG }}>
-      <div className="mx-auto px-6 py-14 max-w-7xl">
-        <div className="flex items-center justify-between gap-4 mb-8">
-          <Link to="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
-            <img
-              src="/unc-charlotte-logo.png?v=5"
-              alt="University of North Carolina Charlotte"
-              className="h-12 sm:h-14 w-auto object-contain"
-            />
-            <span className="text-xs tracking-widest uppercase" style={{ color: ON_DARK_MUTED, fontFamily: "ui-monospace, monospace" }}>
-              School of Data Science
-            </span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className="flex items-center gap-2 text-sm hover:opacity-90 transition-opacity"
-              style={{ color: "#FFFFFF" }}
-            >
-              <ArrowLeft size={16} /> Back
-            </button>
-            <Link to="/" className="flex items-center gap-2 text-sm" style={{ color: "#FFFFFF" }}>
-              <Home size={16} /> Home
-            </Link>
-          </div>
-        </div>
-
-        <RegistrationPanel />
       </div>
     </div>
   );

@@ -173,6 +173,82 @@ export const COURSES = [
     prereqs: "DTSC 4301 (co-req or prior)" },
 ];
 
+/** Core requirement rows for the Explore courses overview. */
+export const CORE_REQUIREMENT_GROUPS = [
+  {
+    id: "data_science",
+    label: "Data Science",
+    items: [
+      { codes: "DTSC 1301 · 1302", title: "Data & Society A & B" },
+      { codes: "DTSC 2301 · 2302", title: "Modeling & Society A & B" },
+      { codes: "DTSC 3601 · 3602", title: "Predictive Analytics A & B" },
+      { codes: "DTSC 4301 · 4302", title: "Social Good A & B", capstone: true },
+    ],
+  },
+  {
+    id: "statistics",
+    label: "Statistics",
+    items: [
+      { codes: "STAT 1220 / 1221 / 1222", title: "Intro Stats (choose one)" },
+      { codes: "STAT 2223", title: "Elements of Statistics II" },
+      { codes: "STAT 3160", title: "Applied Multivariate Analysis" },
+    ],
+  },
+  {
+    id: "mathematics",
+    label: "Mathematics",
+    items: [
+      { codes: "MATH 1120 / 1241", title: "Calculus (choose one)" },
+      { codes: "MATH 2164", title: "Matrices & Linear Algebra" },
+    ],
+  },
+  {
+    id: "computing",
+    label: "Computing",
+    items: [
+      { codes: "ITSC 1213", title: "Intro to Computer Science II" },
+      { codes: "ITSC 2175 or MATH 1165", title: "Logic & Discrete Structures" },
+      { codes: "ITSC 2214", title: "Data Structures & Algorithms" },
+      { codes: "ITCS 3162", title: "Intro to Data Mining" },
+      { codes: "ITCS 3160", title: "Database Design & Implementation" },
+    ],
+  },
+];
+
+/** Recommended elective pathways; `electives` are codes from COURSES. */
+export const ELECTIVE_PATHWAYS = [
+  {
+    id: "ai_ml",
+    label: "AI & ML",
+    blurb: "Machine learning, deep learning, NLP",
+    electives: ["ITCS 3156", "ITCS 3153", "ITCS 4152", "MATH 3163"],
+  },
+  {
+    id: "data_engineering",
+    label: "Data Engineering",
+    blurb: "Data infrastructure, big data, cloud, pipelines",
+    electives: ["ITCS 4145", "ITIS 4166", "ITCS 3166", "ITIS 3200"],
+  },
+  {
+    id: "business_analytics",
+    label: "Business Analytics",
+    blurb: "Data-driven decisions and applied business analytics",
+    electives: ["STAT 3128", "STAT 4128", "ITCS 4122"],
+  },
+  {
+    id: "visualization",
+    label: "Visualization",
+    blurb: "Data visualization, HCI and storytelling with data",
+    electives: ["ITCS 4122", "ITCS 4123", "ITIS 4350"],
+  },
+  {
+    id: "applied_ds",
+    label: "Applied Data Science",
+    blurb: "Health, finance, social good and urban analytics",
+    electives: ["STAT 3128", "STAT 4128", "ITIS 3200", "MATH 2241"],
+  },
+];
+
 const INSTRUCTORS = [
   "Marco Scipioni", "Alicia Johnson", "Sam Patel", "Elena Ruiz", "Priya Nair",
   "James Okonkwo", "Nora Kim", "David Chen", "Maya Brooks", "Chris Nguyen",
@@ -245,13 +321,3 @@ export function buildRegistrationCatalog() {
 }
 
 export const REGISTRATION_CATALOG = buildRegistrationCatalog();
-
-export function coursesByCategory(categoryId) {
-  return COURSES.filter((c) => courseMatchesBrowseBucket(c, categoryId));
-}
-
-export function getCategoryLabel(categoryId) {
-  return BROWSE_BUCKET_META[categoryId]?.label
-    || CATEGORY_META[categoryId]?.label
-    || categoryId;
-}

@@ -19,7 +19,7 @@ import { buildReflectAnswers, inferCareerTarget } from "./lib/reflectScoring";
 import { rankCareersForStudent } from "./lib/careerFromCourses";
 import { buildStudentRecord, courseHistoryTitles } from "./lib/studentRecord";
 import AdvisorChat from "./components/AdvisorChat";
-import CatalogBrowser from "./components/CatalogBrowser";
+import CoreRequirementsOverview from "./components/CoreRequirementsOverview";
 import ElectivesPanel from "./components/ElectivesPanel";
 import CourseAdvisor from "./components/CourseAdvisor";
 import {
@@ -331,7 +331,13 @@ function CourseCard({ course, recommended }) {
   );
 }
 
-function ExploreStep() {
+function ExploreStep({
+  recommendations,
+  recommendLoading,
+  recommendError,
+  recommendSummary,
+  onGetRecommendations,
+}) {
   return (
     <div>
       <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>
@@ -341,15 +347,22 @@ function ExploreStep() {
         Explore courses.
       </h1>
       <p className="text-base mb-8 max-w-2xl" style={{ color: ON_DARK_MUTED }}>
-        Browse the catalog by Core (Gen Ed, Computing, DS Core, Capstone) or Electives outside the major.
+        See what the major requires, then pick an elective pathway to see matching courses.
       </p>
 
-      <CatalogBrowser registerPath="/register-courses" />
+      <CoreRequirementsOverview
+        registerPath="/register-courses"
+        recommendations={recommendations}
+        recommendLoading={recommendLoading}
+        recommendError={recommendError}
+        recommendSummary={recommendSummary}
+        onGetRecommendations={onGetRecommendations}
+      />
     </div>
   );
 }
 
-function RoadmapStep({ reflectAnswers, onAskAdvisor }) {
+function RoadmapStep({ reflectAnswers, recommendations, onAskAdvisor }) {
   const [openStages, setOpenStages] = useState(new Set());
 
   const toggleStage = (title) => {
@@ -383,7 +396,7 @@ function RoadmapStep({ reflectAnswers, onAskAdvisor }) {
         </button>
       </div>
 
-      <ElectivesPanel reflectAnswers={reflectAnswers} />
+      <ElectivesPanel reflectAnswers={reflectAnswers} recommendations={recommendations} />
 
       <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>
         The road through the major
@@ -673,9 +686,6 @@ export default function App() {
         @media (hover: hover) {
           .flip-card:hover .flip-inner { transform: rotateY(180deg); }
         }
-        .preferred-load-input::-webkit-outer-spin-button,
-        .preferred-load-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .preferred-load-input { -moz-appearance: textfield; appearance: textfield; }
       `}</style>
 
       <div className={`mx-auto px-6 py-14 ${step === 0 || step === 1 || step === 2 ? "max-w-7xl" : "max-w-5xl"}`}>
@@ -731,8 +741,22 @@ export default function App() {
             recommendations={recommendations}
           />
         )}
-        {step === 1 && <RoadmapStep reflectAnswers={reflectAnswers} onAskAdvisor={() => setChatOpen(true)} />}
-        {step === 2 && <ExploreStep />}
+        {step === 1 && (
+          <RoadmapStep
+            reflectAnswers={reflectAnswers}
+            recommendations={recommendations}
+            onAskAdvisor={() => setChatOpen(true)}
+          />
+        )}
+        {step === 2 && (
+          <ExploreStep
+            recommendations={recommendations}
+            recommendLoading={recommendLoading}
+            recommendError={recommendError}
+            recommendSummary={recommendSummary}
+            onGetRecommendations={fetchRecommendations}
+          />
+        )}
         {step === 3 && (
           <CareersStep
             flipped={flipped}

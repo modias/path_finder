@@ -17,6 +17,7 @@ import {
   scoreCourseForReflectDetail,
   STRONG_MATCH_MIN,
 } from "../src/lib/reflectScoring.js";
+import { getSyllabusText } from "../lib/syllabusLookup.js";
 
 const FALLBACK_REASON =
   "Matches your current eligibility — couldn't generate a personalized explanation right now";
@@ -63,12 +64,11 @@ export const RECOMMENDATION_BLOCKLIST = new Set(
  * @returns {Promise<T>}
  */
 function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("Gemini request timed out")), ms);
-    }),
-  ]);
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("Gemini request timed out")), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 const RECOMMENDATION_RESPONSE_SCHEMA = {
@@ -88,6 +88,24 @@ const RECOMMENDATION_RESPONSE_SCHEMA = {
     },
   },
   required: ["summary", "courses"],
+};
+
+const EXPLANATION_RESPONSE_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    courses: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          code: { type: SchemaType.STRING },
+          reason: { type: SchemaType.STRING },
+        },
+        required: ["code", "reason"],
+      },
+    },
+  },
+  required: ["courses"],
 };
 
 /**
@@ -484,6 +502,149 @@ export function finalizeRecommendationsFromText(text, eligible, answers = {}) {
 }
 
 /**
+ * Score trail handed to the explanation step. This does not rescore the course.
+ * @param {string} code
+ * @param {Record<string, unknown>} answers
+ * @param {{ matchPercent?: number, matchLabel?: string }} rec
+ * @returns {string}
+ */
+function scoreTrailFor(code, answers, rec) {
+  const detail = scoreCourseForReflectDetail(code, answers);
+  const percent = rec.matchPercent ?? detail.matchPercent ?? matchPercentFromScore(detail.score);
+  const label = rec.matchLabel || detail.label;
+  if (detail.drivers.length) {
+    return `${detail.drivers.join("; ")} → ${percent}% match (${label})`;
+  }
+  return `${percent}% match (${label})`;
+}
+
+/**
+ * Prompt for the post-selection explanation call. The course list is the
+ * already chosen 3–5, not the eligible shortlist.
+ * @param {Array<{ rec: { code: string, title?: string, matchPercent?: number, matchLabel?: string }, syllabusText: string }>} courses
+ * @param {Record<string, unknown>} answers
+ * @returns {string}
+ */
+export function buildSyllabusExplanationPrompt(courses, answers = {}) {
+  const payload = courses.map(({ rec, syllabusText }) => ({
+    code: rec.code,
+    title: rec.title,
+    scoreTrail: scoreTrailFor(rec.code, answers, rec),
+    syllabusText,
+  }));
+
+  return `SYLLABUS_EXPLANATION_STEP
+These courses were already selected. Do not add, drop, replace, or reorder course codes.
+Write one sentence per course for "reason". Describe what the course actually covers using syllabusText, and connect that content to scoreTrail. Do not invent topics that are not in syllabusText.
+
+Return JSON only: {"courses":[{"code":"SUBJ 1234","reason":"one sentence"}]}
+
+SELECTED_COURSES:
+${JSON.stringify(payload, null, 2)}`;
+}
+
+/**
+ * @param {string} text
+ * @returns {Map<string, string>}
+ */
+function parseExplanationReasons(text) {
+  /** @type {Map<string, string>} */
+  const reasons = new Map();
+  try {
+    const jsonText = String(text || "")
+      .replace(/^```json\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
+    const parsed = JSON.parse(jsonText);
+    for (const course of parsed.courses || []) {
+      const reason = String(course?.reason || "").trim();
+      if (!course?.code || !reason) continue;
+      reasons.set(normalizeCode(course.code), reason);
+    }
+  } catch {
+    return reasons;
+  }
+  return reasons;
+}
+
+/**
+ * After selection is final, rewrite explanation sentences with syllabus text.
+ * Codes, match scores, and order are copied from `selection` and never taken
+ * from this model's response. Courses with no indexed syllabus keep their
+ * existing score-trail reason.
+ *
+ * @param {import("@google/generative-ai").GoogleGenerativeAI} genAI
+ * @param {{ summary: string, recommendations: Array<{ code: string, title: string, credits: number, category?: string, matchPercent?: number, matchLabel?: string, reason: string }>, eligibleCount: number }} selection
+ * @param {Record<string, unknown>} [answers]
+ */
+export async function groundExplanationsWithSyllabus(genAI, selection, answers = {}) {
+  const recommendations = selection.recommendations || [];
+  const withSyllabus = recommendations.flatMap((rec) => {
+    const syllabusText = getSyllabusText(rec.code);
+    return syllabusText ? [{ rec, syllabusText }] : [];
+  });
+  if (!withSyllabus.length || !genAI) return selection;
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-3.6-flash",
+      systemInstruction:
+        "You explain courses that were already selected. Do not add, remove, or replace course codes.",
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: "application/json",
+        responseSchema: EXPLANATION_RESPONSE_SCHEMA,
+      },
+    });
+    const result = await withTimeout(
+      model.generateContent(buildSyllabusExplanationPrompt(withSyllabus, answers)),
+      GEMINI_TIMEOUT_MS
+    );
+    const reasons = parseExplanationReasons(result.response.text());
+    const sent = new Set(withSyllabus.map((entry) => normalizeCode(entry.rec.code)));
+    return {
+      ...selection,
+      recommendations: recommendations.map((rec) => {
+        const code = normalizeCode(rec.code);
+        const reason = reasons.get(code);
+        if (!sent.has(code) || !reason) return rec;
+        return { ...rec, reason };
+      }),
+    };
+  } catch (err) {
+    console.error("Syllabus explanation Gemini error:", err?.message || err);
+    return selection;
+  }
+}
+
+/**
+ * Tag each recommendation with whether its reason was rewritten from syllabus
+ * text. A reason only counts as grounded if it changed and the course has an
+ * indexed syllabus, so fallback score-trail reasons are never mislabeled.
+ *
+ * @template {{ code: string, reason: string }} R
+ * @param {{ recommendations?: R[] }} before
+ * @param {{ recommendations?: R[] }} after
+ */
+export function markSyllabusGrounded(before, after) {
+  const priorReasons = new Map(
+    (before.recommendations || []).map((rec) => [normalizeCode(rec.code), rec.reason])
+  );
+  return {
+    ...after,
+    recommendations: (after.recommendations || []).map((rec) => {
+      const code = normalizeCode(rec.code);
+      const syllabusGrounded =
+        Boolean(rec.reason) &&
+        priorReasons.has(code) &&
+        rec.reason !== priorReasons.get(code) &&
+        getSyllabusText(code) != null;
+      return { ...rec, syllabusGrounded };
+    }),
+  };
+}
+
+/**
  * @param {import("@google/generative-ai").GoogleGenerativeAI} genAI
  * @param {{ answers: Record<string, unknown> }} params
  * @returns {Promise<{ summary: string, recommendations: Array<{ code: string, title: string, credits: number, category?: string, reason: string }>, eligibleCount: number }>}
@@ -503,7 +664,7 @@ export async function recommendCourses(genAI, { answers = {} }) {
     },
   });
 
-  let text;
+  let selected;
   try {
     const result = await withTimeout(
       model.generateContent(
@@ -511,15 +672,19 @@ export async function recommendCourses(genAI, { answers = {} }) {
       ),
       GEMINI_TIMEOUT_MS
     );
-    text = result.response.text().trim();
+    const text = result.response.text().trim();
+    selected = finalizeRecommendationsFromText(text, eligible, answers);
   } catch (err) {
     // Network errors, bad API key, rate limits, rejected responseSchema, etc.
     console.error(
       "Recommend courses Gemini error:",
       err?.message || err
     );
-    return buildFallbackRecommendations(eligible, undefined, answers);
+    selected = buildFallbackRecommendations(eligible, undefined, answers);
   }
 
-  return finalizeRecommendationsFromText(text, eligible, answers);
+  // Selection is finished above (codes, match scores, order). Syllabus text
+  // is read only here, and only to rewrite explanation sentences.
+  const grounded = await groundExplanationsWithSyllabus(genAI, selected, answers);
+  return markSyllabusGrounded(selected, grounded);
 }

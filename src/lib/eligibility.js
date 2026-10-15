@@ -143,19 +143,3 @@ export function filterToEligibleCodes(codes, eligibleCatalog) {
     .map((code) => normalizeCode(code))
     .filter((code) => eligibleSet.has(code));
 }
-
-/**
- * Catalog courses that exist in COURSES but lack verified prerequisite data.
- * @param {CatalogCourse[]} catalog
- * @returns {Array<{ code: string, title: string, category?: string }>}
- */
-export function listUnverifiedCatalogCourses(catalog) {
-  return catalog
-    .map((c) => ({
-      code: normalizeCode(`${c.subject} ${c.number}`),
-      title: c.title || "",
-      category: c.category,
-    }))
-    .filter((c) => !hasVerifiedRules(c.code))
-    .sort((a, b) => a.code.localeCompare(b.code));
-}
