@@ -370,7 +370,7 @@ export const INTEREST_ELECTIVE_CLUSTERS = {
   hci: ["ITIS 3130", "ITIS 3140", "ITIS 4350", "ITIS 4353", "ITIS 4355", "ITIS 4360"],
   bioinformatics: { prefix: "BINF" },
   sportsAnalytics: { codes: ["DTSC 1110", "DTSC 2110"], prefix: "SPOA" },
-  cloudSystems: ["ITCS 3190", "ITCS 4145", "ITIS 3246", "ITSC 3146"],
+  cloudSystems: ["ITCS 3190", "ITCS 4145", "ITCS 3166", "ITIS 3246", "ITSC 3146"],
 };
 
 /** Math-heavy electives (prereq chains through linear algebra / stats). */

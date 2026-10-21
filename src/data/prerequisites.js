@@ -82,6 +82,39 @@ export const PREREQUISITES = {
   // https://facultygovernance.charlotte.edu/request-create-itisitcs-41805180/
   // Catalog copy lists ITCS 2214; this program's computing sequence uses ITSC 2214.
   "ITIS 4180": { prereqs: [{ oneOf: ["ITSC 2214", "ITCS 2214"] }], coreqs: [] },
+
+  // https://catalog.charlotte.edu/preview_course_nopop.php?catoid=42&coid=147973
+  "ITCS 3153": {
+    prereqs: [
+      {
+        oneOf: [
+          { all: ["ITSC 2214", "MATH 2112"] },
+          { all: ["MATH 2164", "STAT 2122"] },
+        ],
+      },
+    ],
+    coreqs: [],
+  },
+
+  // https://catalog.charlotte.edu/preview_course_nopop.php?catoid=42&coid=148014
+  "ITIS 3135": { prereqs: [{ all: ["ITSC 2214"] }], coreqs: [] },
+
+  // https://catalog.charlotte.edu/preview_course_nopop.php?catoid=42&coid=149392
+  "ITCS 3190": { prereqs: [{ all: ["ITSC 2214"] }], coreqs: [] },
+
+  // https://catalog.charlotte.edu/preview_course_nopop.php?catoid=42&coid=147976
+  "ITCS 3166": { prereqs: [{ all: ["ITSC 1213"] }], coreqs: [] },
+
+  // https://catalog.charlotte.edu/preview_course_nopop.php?catoid=40&coid=139663
+  // Catalog lists ITSC 3160; this program's database course is ITCS 3160.
+  "ITIS 4166": { prereqs: [{ oneOf: ["ITSC 3160", "ITCS 3160"] }], coreqs: [] },
+
+  // https://catalog.charlotte.edu/preview_course_nopop.php?catoid=42&coid=147992
+  // "or permission of instructor" is not modeled as a course-completion Rule.
+  "ITCS 4145": { prereqs: [{ all: ["ITSC 3146"] }], coreqs: [] },
+
+  // https://catalog.charlotte.edu/preview_course_nopop.php?catoid=40&coid=139870
+  "MATH 2241": { prereqs: [{ all: ["MATH 1242"] }], coreqs: [] },
 };
 
 /**
@@ -115,6 +148,9 @@ export const VERIFIED_NO_PREREQ = new Set([
   // https://catalog.charlotte.edu/preview_course_nopop.php?catoid=27&coid=89882
   // Course-completion prereqs: none (sophomore-standing restriction only).
   "ITIS 4350",
+  // https://catalog.charlotte.edu/preview_course_nopop.php?catoid=27&coid=88490
+  // Catalog copy lists no Prerequisite(s) line (natural-science lecture+lab).
+  "BINF 1101",
 ]);
 
 /**

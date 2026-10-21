@@ -49,6 +49,58 @@ describe("checkEligibility", () => {
     assert.equal(result.eligible, true);
   });
 
+  it("allows ITIS 3135 and ITCS 3190 when ITSC 2214 is completed", () => {
+    const record = { completed: ["ITSC 2214"], inProgress: [] };
+    assert.equal(checkEligibility("ITIS 3135", record).eligible, true);
+    assert.equal(checkEligibility("ITCS 3190", record).eligible, true);
+  });
+
+  it("allows ITCS 3166 when ITSC 1213 is completed", () => {
+    const result = checkEligibility("ITCS 3166", {
+      completed: ["ITSC 1213"],
+      inProgress: [],
+    });
+    assert.equal(result.eligible, true);
+  });
+
+  it("treats BINF 1101 as eligible with no course-completion prereqs", () => {
+    const result = checkEligibility("BINF 1101", emptyRecord);
+    assert.equal(result.eligible, true);
+    assert.equal(result.unverified, undefined);
+  });
+
+  it("blocks MATH 2241 until MATH 1242 is completed", () => {
+    const result = checkEligibility("MATH 2241", {
+      completed: ["MATH 1241"],
+      inProgress: [],
+    });
+    assert.equal(result.eligible, false);
+    assert.ok(result.missingPrereqs.some((m) => m.includes("MATH 1242")));
+  });
+
+  it("blocks ITIS 4166 until the database prereq is completed", () => {
+    const missing = checkEligibility("ITIS 4166", {
+      completed: ["ITSC 2214"],
+      inProgress: [],
+    });
+    assert.equal(missing.eligible, false);
+
+    const allowed = checkEligibility("ITIS 4166", {
+      completed: ["ITCS 3160"],
+      inProgress: [],
+    });
+    assert.equal(allowed.eligible, true);
+  });
+
+  it("blocks ITCS 4145 until ITSC 3146 is completed", () => {
+    const result = checkEligibility("ITCS 4145", {
+      completed: ["ITSC 2214"],
+      inProgress: [],
+    });
+    assert.equal(result.eligible, false);
+    assert.ok(result.missingPrereqs.some((m) => m.includes("ITSC 3146")));
+  });
+
   it("treats verified-no-prereq gen-ed courses as eligible", () => {
     const result = checkEligibility("WRDS 1103", emptyRecord);
     assert.equal(result.eligible, true);

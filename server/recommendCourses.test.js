@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  buildFallbackRecommendations,
   buildRecommendPrompt,
   finalizeRecommendationsFromText,
   isBlockedFromRecommendation,
@@ -586,5 +587,64 @@ describe("parseCreditLoadHours and packRecommendationsToLoad", () => {
       packed.map((rec) => rec.code),
       ["ITCS 4123", "ITIS 4180", "ITIS 4350"]
     );
+  });
+});
+
+describe("eligible electives change with Reflect interests", () => {
+  const interestKeys = [
+    "ai",
+    "dataViz",
+    "cybersecurity",
+    "webMobile",
+    "games",
+    "robotics",
+    "hci",
+    "bioinformatics",
+    "sportsAnalytics",
+    "cloudSystems",
+  ];
+  const styleKeys = [
+    "mathComfort",
+    "programmingConfidence",
+    "handsOnVsTheory",
+    "soloVsTeam",
+    "researchVsProduct",
+    "specializeVsBroad",
+  ];
+
+  function answersWith(interestOverrides) {
+    return {
+      interestRatings: Object.fromEntries(
+        interestKeys.map((key) => [key, interestOverrides[key] ?? 1])
+      ),
+      styleRatings: Object.fromEntries(styleKeys.map((key) => [key, 3])),
+      registerTerm: "Fall 2026",
+      creditLoad: "12-15 credits",
+    };
+  }
+
+  function topCodes(interestOverrides) {
+    const eligible = getEligibleCourses(COURSES, buildStudentRecord());
+    return buildFallbackRecommendations(
+      eligible,
+      undefined,
+      answersWith(interestOverrides)
+    ).recommendations.map((rec) => rec.code);
+  }
+
+  it("recommends different eligible electives for web, cloud, viz, and bioinformatics ratings", () => {
+    const web = topCodes({ webMobile: 5 });
+    const cloud = topCodes({ cloudSystems: 5 });
+    const viz = topCodes({ dataViz: 5 });
+    const bio = topCodes({ bioinformatics: 5 });
+
+    assert.equal(web[0], "ITIS 3135");
+    assert.ok(web.includes("ITIS 4180"));
+    assert.ok(["ITCS 3166", "ITCS 3190"].includes(cloud[0]));
+    assert.equal(viz[0], "ITCS 4123");
+    assert.equal(bio[0], "BINF 1101");
+    assert.notDeepEqual(web, cloud);
+    assert.notDeepEqual(web, viz);
+    assert.notDeepEqual(cloud, bio);
   });
 });

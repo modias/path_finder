@@ -565,6 +565,49 @@ export function buildReflectAnswers(
   };
 }
 
+export const REFLECT_ANSWERS_REQUIRED_ERROR =
+  "Answer every question in Section A (interest) and Section B (work style) before getting course recommendations.";
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isCompleteRating(value) {
+  return Number.isInteger(value) && value >= 1 && value <= 5;
+}
+
+/**
+ * Missing 1–5 ratings that recommendations need from Reflect.
+ * Section C (topics/skills/deliverables) is optional.
+ *
+ * @param {Record<string, unknown>} [answers]
+ * @returns {{ interest: string[], style: string[] }}
+ */
+export function missingReflectRatings(answers = {}) {
+  const interestRatings = answers.interestRatings || {};
+  const styleRatings = answers.styleRatings || {};
+  return {
+    interest: INTEREST_QUESTIONS.filter((question) => !isCompleteRating(interestRatings[question.key])).map(
+      (question) => question.key
+    ),
+    style: STYLE_QUESTIONS.filter((question) => !isCompleteRating(styleRatings[question.key])).map(
+      (question) => question.key
+    ),
+  };
+}
+
+/**
+ * Error message if Reflect ratings are incomplete; otherwise null.
+ *
+ * @param {Record<string, unknown>} [answers]
+ * @returns {string | null}
+ */
+export function validateReflectAnswersForRecommendations(answers = {}) {
+  const missing = missingReflectRatings(answers);
+  if (missing.interest.length === 0 && missing.style.length === 0) return null;
+  return REFLECT_ANSWERS_REQUIRED_ERROR;
+}
+
 function formatRatingBlock(title, questions, ratings = {}) {
   const lines = questions
     .map((question) => {

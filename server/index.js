@@ -7,7 +7,10 @@ import {
 } from "../src/data/curriculum.js";
 import { buildTrackedElectives } from "../src/lib/trackedElectives.js";
 import { recommendCourses, buildAdvisorCourseContext } from "./recommendCourses.js";
-import { formatReflectAnswersForPrompt } from "../src/lib/reflectScoring.js";
+import {
+  formatReflectAnswersForPrompt,
+  validateReflectAnswersForRecommendations,
+} from "../src/lib/reflectScoring.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -138,6 +141,10 @@ app.post("/api/recommend-courses", async (req, res) => {
   }
   if (!answers.creditLoad?.trim()) {
     return res.status(400).json({ error: "Credit load is required." });
+  }
+  const reflectError = validateReflectAnswersForRecommendations(answers);
+  if (reflectError) {
+    return res.status(400).json({ error: reflectError });
   }
 
   try {

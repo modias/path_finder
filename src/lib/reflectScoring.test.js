@@ -10,7 +10,11 @@ import {
   matchLabelFromScore,
   pickCoursesBySpecializePreference,
   filterByMatchConfidence,
+  missingReflectRatings,
+  REFLECT_ANSWERS_REQUIRED_ERROR,
+  validateReflectAnswersForRecommendations,
 } from "./reflectScoring.js";
+import { INTEREST_QUESTIONS, STYLE_QUESTIONS } from "../data/reflectQuestions.js";
 
 describe("scoreCourseForReflect", () => {
   it("uses the highest specialty rating, not an average", () => {
@@ -302,5 +306,42 @@ describe("formatReflectAnswersForPrompt", () => {
     assert.match(text, /Machine learning & AI/);
     assert.match(text, /Data visualization/);
     assert.match(text, /dashboard someone uses/i);
+  });
+});
+
+describe("validateReflectAnswersForRecommendations", () => {
+  const completeAnswers = () => ({
+    interestRatings: Object.fromEntries(INTEREST_QUESTIONS.map((question) => [question.key, 3])),
+    styleRatings: Object.fromEntries(STYLE_QUESTIONS.map((question) => [question.key, 3])),
+  });
+
+  it("errors when no ratings have been answered", () => {
+    const missing = missingReflectRatings({});
+    assert.equal(missing.interest.length, INTEREST_QUESTIONS.length);
+    assert.equal(missing.style.length, STYLE_QUESTIONS.length);
+    assert.equal(validateReflectAnswersForRecommendations({}), REFLECT_ANSWERS_REQUIRED_ERROR);
+  });
+
+  it("errors when only some ratings are filled in", () => {
+    assert.equal(
+      validateReflectAnswersForRecommendations({
+        interestRatings: { ai: 5, dataViz: 4 },
+        styleRatings: { mathComfort: 3 },
+      }),
+      REFLECT_ANSWERS_REQUIRED_ERROR
+    );
+  });
+
+  it("errors when a rating is outside the 1–5 scale", () => {
+    const answers = completeAnswers();
+    answers.interestRatings.ai = 0;
+    assert.equal(
+      validateReflectAnswersForRecommendations(answers),
+      REFLECT_ANSWERS_REQUIRED_ERROR
+    );
+  });
+
+  it("allows recommendations once every interest and work-style rating is set", () => {
+    assert.equal(validateReflectAnswersForRecommendations(completeAnswers()), null);
   });
 });

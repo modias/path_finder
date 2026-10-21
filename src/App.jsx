@@ -15,7 +15,11 @@ import {
 } from "./data/reflectQuestions";
 import { apiFetch } from "./lib/api";
 import { friendlyApiError, parseJsonResponse } from "./lib/apiResponse";
-import { buildReflectAnswers, inferCareerTarget } from "./lib/reflectScoring";
+import {
+  buildReflectAnswers,
+  inferCareerTarget,
+  validateReflectAnswersForRecommendations,
+} from "./lib/reflectScoring";
 import { rankCareersForStudent } from "./lib/careerFromCourses";
 import { buildStudentRecord, courseHistoryTitles } from "./lib/studentRecord";
 import AdvisorChat from "./components/AdvisorChat";
@@ -153,7 +157,6 @@ function ReflectStep({
   toggleDeliverable,
   note,
   setNote,
-  onNext,
   onGetRecommendations,
   recommendLoading,
   recommendError,
@@ -272,9 +275,6 @@ function ReflectStep({
         >
           <Sparkles size={16} />
           {recommendLoading ? "Finding courses..." : "Get course recommendations"}
-        </button>
-        <button onClick={onNext} className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold" style={{ background: GOLD, color: INK }}>
-          See where this leads <ArrowRight size={16} />
         </button>
       </div>
 
@@ -649,10 +649,20 @@ export default function App() {
   };
 
   const fetchRecommendations = async () => {
-    setRecommendLoading(true);
-    setRecommendError(null);
+    const validationError = validateReflectAnswersForRecommendations(reflectAnswers);
     setRecommendSummary(null);
     setRecommendations([]);
+    if (validationError) {
+      setRecommendLoading(false);
+      setRecommendError(validationError);
+      window.requestAnimationFrame(() => {
+        document.getElementById("course-recommendations")?.scrollIntoView({ behavior: "smooth" });
+      });
+      return;
+    }
+
+    setRecommendLoading(true);
+    setRecommendError(null);
 
     try {
       const res = await apiFetch("/api/recommend-courses", {
@@ -733,7 +743,6 @@ export default function App() {
             toggleDeliverable={toggleDeliverable}
             note={note}
             setNote={setNote}
-            onNext={() => setStep(1)}
             onGetRecommendations={fetchRecommendations}
             recommendLoading={recommendLoading}
             recommendError={recommendError}
@@ -772,7 +781,7 @@ export default function App() {
               <ArrowLeft size={16} /> Back
             </button>
           ) : <span />}
-          {step < 3 && (
+          {step < 3 && (step !== 0 || (!recommendLoading && recommendations.length > 0)) && (
             <button
               onClick={() => setStep(step + 1)}
               className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold"
