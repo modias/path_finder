@@ -465,17 +465,12 @@ describe("syllabus explanations are additive", () => {
       without.recommendations.map((rec) => rec.code)
     );
 
-    assert.equal(withoutClient.calls.length, 1);
-    assert.equal(withoutClient.calls[0].userPrompt.includes("SYLLABUS_EXPLANATION_STEP"), false);
-    assert.equal(withoutClient.calls[0].systemInstruction.includes(marker), false);
+    assert.equal(withoutClient.calls.length, 0);
 
-    assert.equal(withClient.calls.length, 2);
-    assert.equal(withClient.calls[0].userPrompt.includes("SYLLABUS_EXPLANATION_STEP"), false);
-    assert.equal(withClient.calls[0].systemInstruction.includes(marker), false);
-    assert.equal(withClient.calls[0].userPrompt.includes(marker), false);
-    assert.equal(withClient.calls[1].userPrompt.includes("SYLLABUS_EXPLANATION_STEP"), true);
-    assert.equal(withClient.calls[1].userPrompt.includes(marker), true);
-    assert.match(withClient.calls[1].userPrompt, /scoreTrail/);
+    assert.equal(withClient.calls.length, 1);
+    assert.equal(withClient.calls[0].userPrompt.includes("SYLLABUS_EXPLANATION_STEP"), true);
+    assert.equal(withClient.calls[0].userPrompt.includes(marker), true);
+    assert.match(withClient.calls[0].userPrompt, /scoreTrail/);
 
     for (const rec of withSyllabus.recommendations) {
       assert.match(rec.reason, /UNIQUE_SYLLABUS_MARKER/);
@@ -646,5 +641,17 @@ describe("eligible electives change with Reflect interests", () => {
     assert.notDeepEqual(web, cloud);
     assert.notDeepEqual(web, viz);
     assert.notDeepEqual(cloud, bio);
+  });
+
+  it("does not collapse AI, games, and HCI answers to the same three electives", () => {
+    const ai = topCodes({ ai: 5 });
+    const games = topCodes({ games: 5 });
+    const hci = topCodes({ hci: 5 });
+
+    assert.equal(hci[0], "ITIS 4350");
+    assert.ok(["ITCS 4123", "ITCS 3166", "ITCS 3190"].includes(ai[0]));
+    assert.ok(["ITIS 4350", "ITIS 3135", "ITIS 4180"].includes(games[0]));
+    assert.notDeepEqual(ai.slice(0, 3), hci.slice(0, 3));
+    assert.notDeepEqual(ai.slice(0, 3), ["BINF 1101", "ITCS 3166", "ITCS 3190"]);
   });
 });

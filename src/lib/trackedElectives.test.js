@@ -8,8 +8,11 @@ import {
   listOutsideElectiveCodes,
   lookupTrackedElectiveCatalog,
   pickAlternateElective,
+  pickAlternateElectives,
   LOW_MATCH_REFRESH_PERCENT,
   MAX_DISPLAYED_ELECTIVES,
+  PINNED_ELECTIVE_COUNT,
+  SWAP_ELECTIVE_COUNT,
 } from "./trackedElectives.js";
 import { TRACKED_ELECTIVE_CODES } from "../data/curriculum.js";
 import { COURSES } from "../data/courseCatalog.js";
@@ -124,6 +127,46 @@ describe("pickAlternateElective", () => {
       reflectAnswers: {},
     });
     assert.equal(alt, null);
+  });
+});
+
+describe("pickAlternateElectives", () => {
+  it("pins two electives and swaps two at a time, still showing four", () => {
+    assert.equal(PINNED_ELECTIVE_COUNT, 2);
+    assert.equal(SWAP_ELECTIVE_COUNT, 2);
+    assert.equal(PINNED_ELECTIVE_COUNT + SWAP_ELECTIVE_COUNT, MAX_DISPLAYED_ELECTIVES);
+  });
+
+  it("returns two distinct non-excluded electives", () => {
+    const exclude = TRACKED_ELECTIVE_CODES;
+    const alts = pickAlternateElectives({
+      excludeCodes: exclude,
+      reflectAnswers: { interestRatings: { dataViz: 5 } },
+      count: SWAP_ELECTIVE_COUNT,
+    });
+
+    assert.equal(alts.length, SWAP_ELECTIVE_COUNT);
+    assert.notEqual(alts[0].code, alts[1].code);
+    for (const alt of alts) {
+      assert.ok(!exclude.includes(alt.code));
+      assert.notEqual(alt.status, "completed");
+    }
+  });
+
+  it("skips already-shown codes so a refresh can bring in a new bottom pair", () => {
+    const shown = buildInitialElectiveCodes({ interestRatings: { dataViz: 5, ai: 5 } });
+    const pinned = shown.slice(0, PINNED_ELECTIVE_COUNT);
+    const alts = pickAlternateElectives({
+      excludeCodes: shown,
+      reflectAnswers: { interestRatings: { dataViz: 5, ai: 5 } },
+      count: SWAP_ELECTIVE_COUNT,
+    });
+
+    assert.equal(alts.length, SWAP_ELECTIVE_COUNT);
+    for (const alt of alts) {
+      assert.ok(!shown.includes(alt.code), `${alt.code} was already on screen`);
+      assert.ok(!pinned.includes(alt.code));
+    }
   });
 });
 

@@ -72,7 +72,7 @@ export default function RegisterCourses() {
         </p>
 
         <div className="mb-12">
-          <CatalogBrowser showRegisterCta={false} registerPath="/register-courses" />
+          <CatalogBrowser registerPath="/register-courses" />
         </div>
 
         <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>

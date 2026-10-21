@@ -361,7 +361,7 @@ export const INDUSTRY_OPTIONS = [
 
 /** Maps Group 1 keys to elective course clusters (weights, not filters). */
 export const INTEREST_ELECTIVE_CLUSTERS = {
-  ai: ["ITCS 3153", "ITCS 3156", "ITCS 4101", "ITCS 4236"],
+  ai: ["ITCS 3153", "ITCS 3156", "ITCS 4101", "ITCS 4152", "ITCS 4236"],
   dataViz: ["ITCS 3162", "ITCS 4121", "ITCS 4122", "ITCS 4123", "INFO 3236"],
   cybersecurity: ["ITIS 3200", "ITIS 4221", "ITIS 4246", "ITIS 4250", "ITIS 4260", "ITIS 4261", "ITIS 4214"],
   webMobile: ["ITIS 3135", "ITIS 3310", "ITIS 3320", "ITIS 4166", "ITIS 4180"],

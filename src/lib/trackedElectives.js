@@ -5,6 +5,7 @@ import { normalizeCode } from "../data/prerequisites.js";
 import { getEligibleCourses } from "./eligibility.js";
 import {
   scoreCourseForReflectDetail,
+  relatednessToReflectAnswers,
   GOOD_OPTION_MIN,
   GOOD_OPTION_PERCENT,
 } from "./reflectScoring.js";
@@ -17,6 +18,12 @@ export const LOW_MATCH_REFRESH_PERCENT = GOOD_OPTION_PERCENT;
 
 /** Max elective cards shown in ElectivesPanel. */
 export const MAX_DISPLAYED_ELECTIVES = 4;
+
+/** Top cards stay pinned; refresh only replaces the bottom pair. */
+export const PINNED_ELECTIVE_COUNT = 2;
+
+/** How many electives a refresh swap brings in. */
+export const SWAP_ELECTIVE_COUNT = 2;
 
 /** @type {Map<string, import("../data/courseCatalog.js").CatalogCourse>} */
 const catalogByCode = new Map(
@@ -234,6 +241,11 @@ export function rankOutsideElectives({ excludeCodes = [], reflectAnswers = {} } 
       const bPct = b.matchPercent ?? -1;
       if (aPct !== bPct) return bPct - aPct;
 
+      const relatedDelta =
+        relatednessToReflectAnswers(b.code, reflectAnswers) -
+        relatednessToReflectAnswers(a.code, reflectAnswers);
+      if (relatedDelta) return relatedDelta;
+
       const aSignal = a.personalized ? 0 : 1;
       const bSignal = b.personalized ? 0 : 1;
       if (aSignal !== bSignal) return aSignal - bSignal;
@@ -247,13 +259,24 @@ export function rankOutsideElectives({ excludeCodes = [], reflectAnswers = {} } 
 }
 
 /**
+ * Next-best outside electives not already on screen (and not completed).
+ *
+ * @param {Parameters<typeof rankOutsideElectives>[0] & { count?: number }} [opts]
+ * @returns {Array<ReturnType<typeof buildElectiveCard>>}
+ */
+export function pickAlternateElectives({ count = 1, ...opts } = {}) {
+  const n = Number.isFinite(count) && count > 0 ? Math.floor(count) : 1;
+  return rankOutsideElectives(opts).slice(0, n);
+}
+
+/**
  * Next best outside elective not already on screen (and not completed).
  *
  * @param {Parameters<typeof rankOutsideElectives>[0]} [opts]
  * @returns {ReturnType<typeof buildElectiveCard> | null}
  */
 export function pickAlternateElective(opts = {}) {
-  return rankOutsideElectives(opts)[0] ?? null;
+  return pickAlternateElectives({ ...opts, count: 1 })[0] ?? null;
 }
 
 /**

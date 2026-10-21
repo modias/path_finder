@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, BookOpen, NotebookPen } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import {
   BROWSE_BUCKETS,
   BROWSE_BUCKET_META,
@@ -10,7 +10,6 @@ import {
 } from "../data/courseCatalog";
 
 const INK = "#0B2E22";
-const GOLD = "#B3A369";
 const GREEN = "#1F7A54";
 const SURFACE = "#FFFFFF";
 const MUTED = "#5B6660";
@@ -30,11 +29,10 @@ const BUCKET_COLORS = {
 
 /**
  * Embeddable course catalog browser.
- * @param {{ registerPath?: string, showRegisterCta?: boolean }} props
+ * @param {{ registerPath?: string }} props
  */
 export default function CatalogBrowser({
   registerPath = "/register-courses",
-  showRegisterCta = true,
 }) {
   const [activeCategory, setActiveCategory] = useState("");
 
@@ -114,29 +112,6 @@ export default function CatalogBrowser({
 
   return (
     <div>
-      {showRegisterCta && (
-        <div className="flex flex-wrap gap-3 mb-6">
-          <Link
-            to={registerPath}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold"
-            style={{ background: GOLD, color: INK }}
-          >
-            <NotebookPen size={16} />
-            Go to Register courses
-          </Link>
-          {activeCategory && (
-            <Link
-              to={`${registerPath}?category=${activeCategory}`}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold"
-              style={{ background: GREEN, color: "#FFFFFF" }}
-            >
-              Find sections in {activeMeta?.short || "category"}
-              <ArrowRight size={16} />
-            </Link>
-          )}
-        </div>
-      )}
-
       <div className="rounded-2xl overflow-hidden mb-6" style={{ background: SURFACE, border: "1px solid #E4E1D4" }}>
         <div className="px-6 py-4" style={{ borderBottom: "1px solid #E4E1D4" }}>
           <h2 className="text-lg font-semibold" style={{ color: INK }}>Browse by category</h2>

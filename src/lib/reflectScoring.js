@@ -31,6 +31,23 @@ export const CAREER_BY_INTEREST = {
   hci: "UX / product analyst",
 };
 
+/**
+ * Neighboring specialties used only as a tie-break when the student's top
+ * interest has no remaining eligible courses in its own cluster.
+ */
+export const RELATED_INTEREST_CLUSTERS = {
+  ai: ["robotics", "dataViz", "cloudSystems"],
+  robotics: ["ai", "games"],
+  games: ["hci", "webMobile", "ai"],
+  cybersecurity: ["cloudSystems", "webMobile"],
+  sportsAnalytics: ["dataViz", "ai"],
+  bioinformatics: ["dataViz", "ai"],
+  dataViz: ["ai", "hci"],
+  webMobile: ["hci", "cloudSystems", "games"],
+  hci: ["webMobile", "games"],
+  cloudSystems: ["webMobile", "cybersecurity", "ai"],
+};
+
 export const STRONG_MATCH_MIN = 4;
 export const GOOD_OPTION_MIN = 3;
 /** Percent cut points for the Rule 9 display scale (1/5 → 0%, 5/5 → 100%). */
@@ -77,6 +94,36 @@ export function interestKeysForCourse(code) {
   return Object.entries(INTEREST_ELECTIVE_CLUSTERS)
     .filter(([, cluster]) => codeMatchesCluster(code, cluster))
     .map(([key]) => key);
+}
+
+/**
+ * Tie-break toward electives adjacent to the student's highest-rated
+ * specialties. Does not change the 1–5 match score.
+ *
+ * @param {string} code
+ * @param {{ interestRatings?: Record<string, number> }} [answers]
+ * @returns {number}
+ */
+export function relatednessToReflectAnswers(code, answers = {}) {
+  const clusters = interestKeysForCourse(code);
+  if (!clusters.length) return 0;
+  const ratings = answers.interestRatings || {};
+  const ranked = Object.entries(ratings)
+    .filter(([, rating]) => rating != null)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+  let best = 0;
+  for (const [key, rating] of ranked) {
+    if (clusters.includes(key)) continue;
+    const related = RELATED_INTEREST_CLUSTERS[key] || [];
+    if (!related.length) continue;
+    for (const cluster of clusters) {
+      const index = related.indexOf(cluster);
+      if (index < 0) continue;
+      best = Math.max(best, rating * ((related.length - index) / related.length));
+    }
+  }
+  return best;
 }
 
 /**

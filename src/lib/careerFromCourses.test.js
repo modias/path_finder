@@ -94,7 +94,27 @@ describe("rankCareersForStudent", () => {
       courseCodes: [],
       reflectAnswers: { interestRatings: { hci: 5 } },
     });
-    assert.equal(ranked.length, 1);
     assert.equal(ranked[0].role, "UX / product analyst");
+  });
+
+  it("reshuffles the top careers when Reflect interests change, even with the same transcript", () => {
+    const taken = ["ITCS 3153", "ITCS 3156", "STAT 1222", "ITSC 2214", "ITCS 4122"];
+    const ux = rankCareersForStudent({
+      takenCodes: taken,
+      courseCodes: [],
+      reflectAnswers: { interestRatings: { hci: 5, ai: 1, webMobile: 1, dataViz: 1 } },
+    });
+    const web = rankCareersForStudent({
+      takenCodes: taken,
+      courseCodes: [],
+      reflectAnswers: { interestRatings: { webMobile: 5, hci: 1, ai: 1, dataViz: 1 } },
+    });
+
+    assert.equal(ux[0].role, "UX / product analyst");
+    assert.equal(web[0].role, "Data engineer");
+    assert.notDeepEqual(
+      ux.slice(0, 3).map((career) => career.role),
+      web.slice(0, 3).map((career) => career.role)
+    );
   });
 });

@@ -14,6 +14,7 @@ import {
   GOOD_OPTION_MIN,
   matchPercentFromScore,
   pickCoursesBySpecializePreference,
+  relatednessToReflectAnswers,
   scoreCourseForReflectDetail,
   STRONG_MATCH_MIN,
 } from "../src/lib/reflectScoring.js";
@@ -181,6 +182,10 @@ export function shortlistEligibleCourses(
   scored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
 
+    const relatedDelta =
+      relatednessToReflectAnswers(b.code, answers) - relatednessToReflectAnswers(a.code, answers);
+    if (relatedDelta) return relatedDelta;
+
     const aProgress = DEGREE_PROGRESS_CATEGORIES.has(a.course.category) ? 0 : 1;
     const bProgress = DEGREE_PROGRESS_CATEGORIES.has(b.course.category) ? 0 : 1;
     if (aProgress !== bProgress) return aProgress - bProgress;
@@ -192,8 +197,16 @@ export function shortlistEligibleCourses(
     return a.code.localeCompare(b.code);
   });
 
-  const preferred = filterByMatchConfidence(scored, Math.min(MIN_RECOMMENDATIONS, scored.length));
-  const pool = preferred.length ? preferred : scored;
+  // Neutral gen-eds score 3/5 with no Reflect drivers and look like "Good options".
+  // Keep them out of the confidence pool so they cannot crowd out electives.
+  const withoutUnratedGenEd = scored.filter(
+    (entry) => entry.course.category !== "gen_ed" || entry.drivers.length > 0
+  );
+  const preferred = filterByMatchConfidence(
+    withoutUnratedGenEd,
+    Math.min(MIN_RECOMMENDATIONS, withoutUnratedGenEd.length)
+  );
+  const pool = preferred.length ? preferred : withoutUnratedGenEd;
   const minCount = Math.min(MIN_RECOMMENDATIONS, limit, scored.length);
 
   const picked = [];
@@ -218,22 +231,13 @@ export function shortlistEligibleCourses(
   for (const entry of pool) {
     if (DEGREE_PROGRESS_CATEGORIES.has(entry.course.category)) take(entry);
   }
-  for (const entry of pool) {
+  for (const entry of scored) {
     if (entry.course.category === "outside_elective") take(entry);
   }
 
-  // Preferred-pool filtering can drop weak electives when gen-eds pad confidence.
-  // Always backfill from the full ranked list so we still surface ≥3 options.
-  if (picked.length < minCount) {
-    for (const entry of scored) {
-      if (entry.course.category === "outside_elective") take(entry);
-      if (picked.length >= minCount) break;
-    }
-  }
   if (picked.length < minCount) {
     for (const entry of scored) {
       if (DEGREE_PROGRESS_CATEGORIES.has(entry.course.category)) take(entry);
-      if (picked.length >= minCount) break;
     }
   }
   // Gen-ed only fills leftover slots when nothing stronger made the shortlist.
@@ -383,10 +387,10 @@ export function buildFallbackRecommendations(
     };
   });
 
-  const defaultSummary =
-    recommendations.some((rec) => rec.category === "outside_elective")
-      ? "Personalized AI explanations aren't available right now — here are eligible electives ranked from your Reflect ratings."
-      : "Personalized AI explanations aren't available right now. Specialty electives may still be blocked until their prerequisites are verified — here are the eligible options left.";
+  const strong = recommendations.filter((rec) => (rec.matchPercent ?? 0) >= 75);
+  const defaultSummary = strong.length
+    ? `Your Reflect answers point to ${recommendations.length} eligible electives. ${strong[0].code} is the strongest match.`
+    : `Here are ${recommendations.length} eligible electives ranked from your Reflect answers.`;
 
   return {
     summary: summary || defaultSummary,
@@ -652,39 +656,10 @@ export function markSyllabusGrounded(before, after) {
 export async function recommendCourses(genAI, { answers = {} }) {
   const record = buildStudentRecord();
   const eligible = getEligibleCourses(COURSES, record);
-  const systemInstruction = buildRecommendPrompt({ eligible, answers });
-
-  const model = genAI.getGenerativeModel({
-    model: "gemini-3.6-flash",
-    systemInstruction,
-    generationConfig: {
-      temperature: 0.3,
-      responseMimeType: "application/json",
-      responseSchema: RECOMMENDATION_RESPONSE_SCHEMA,
-    },
-  });
-
-  let selected;
-  try {
-    const result = await withTimeout(
-      model.generateContent(
-        "Recommend 3-5 courses from the ranked ELIGIBLE_COURSES shortlist. Prefer Strong match / high matchScore and cite scoreDrivers in each reason. Keep total credits near the student's target load. Return JSON only."
-      ),
-      GEMINI_TIMEOUT_MS
-    );
-    const text = result.response.text().trim();
-    selected = finalizeRecommendationsFromText(text, eligible, answers);
-  } catch (err) {
-    // Network errors, bad API key, rate limits, rejected responseSchema, etc.
-    console.error(
-      "Recommend courses Gemini error:",
-      err?.message || err
-    );
-    selected = buildFallbackRecommendations(eligible, undefined, answers);
-  }
-
-  // Selection is finished above (codes, match scores, order). Syllabus text
-  // is read only here, and only to rewrite explanation sentences.
+  // Rank in code from Reflect answers. Gemini may rewrite reasons from
+  // syllabi, but it must not pick or reorder the courses — that was returning
+  // the same 3 electives regardless of what the student rated.
+  const selected = buildFallbackRecommendations(eligible, undefined, answers);
   const grounded = await groundExplanationsWithSyllabus(genAI, selected, answers);
   return markSyllabusGrounded(selected, grounded);
 }

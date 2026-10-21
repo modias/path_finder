@@ -1,11 +1,14 @@
 import { CAREERS, COURSE_CAREER_ROLES } from "../data/curriculum.js";
 import { normalizeCode } from "../data/prerequisites.js";
-import { buildTrackedElectives } from "./trackedElectives.js";
+import { buildInitialElectiveCodes } from "./trackedElectives.js";
 import {
   CAREER_BY_INTEREST,
   interestKeysForCourse,
   inferCareerTarget,
 } from "./reflectScoring.js";
+
+/** A 5/5 Reflect specialty can surface that career alongside classes already taken. */
+export const INTEREST_CAREER_WEIGHT = 1;
 
 /** A course built for a role outweighs one that only shares a specialty area. */
 export const DIRECT_COURSE_WEIGHT = 2;
@@ -109,11 +112,7 @@ export function collectPlannedCourseCodes({
     return [...new Set(fromRecs)];
   }
 
-  const fromElectives = buildTrackedElectives(reflectAnswers)
-    .filter((course) => course.recommended)
-    .map((course) => normalizeCode(course.code));
-
-  return [...new Set(fromElectives)];
+  return buildInitialElectiveCodes(reflectAnswers);
 }
 
 /**
@@ -126,20 +125,43 @@ function courseLabel(code, courseTitles) {
 }
 
 /**
+ * @param {string} role
+ * @param {Record<string, number>} [interestRatings]
+ * @returns {number}
+ */
+export function interestScoreForRole(role, interestRatings = {}) {
+  let max = 0;
+  for (const [key, careerRole] of Object.entries(CAREER_BY_INTEREST)) {
+    if (careerRole !== role) continue;
+    const rating = interestRatings[key];
+    if (rating != null && rating > max) max = rating;
+  }
+  return max * INTEREST_CAREER_WEIGHT;
+}
+
+/**
  * @param {string[]} takenCourses
  * @param {string[]} plannedCourses
  * @param {Record<string, string>} courseTitles
+ * @param {number} [interestScore]
  */
-function buildMatchReason(takenCourses, plannedCourses, courseTitles) {
+function buildMatchReason(takenCourses, plannedCourses, courseTitles, interestScore = 0) {
   if (takenCourses.length) {
     const extra = takenCourses.length - 1;
     return `You've taken ${courseLabel(takenCourses[0], courseTitles)}${
       extra ? ` + ${extra} more related class${extra === 1 ? "" : "es"}` : ""
     }.`;
   }
-  return plannedCourses.length === 1
-    ? `Fits courses like ${plannedCourses[0]} on your plan.`
-    : `Fits courses like ${plannedCourses.slice(0, 3).join(", ")} on your plan.`;
+  if (plannedCourses.length === 1) {
+    return `Fits courses like ${plannedCourses[0]} on your plan.`;
+  }
+  if (plannedCourses.length) {
+    return `Fits courses like ${plannedCourses.slice(0, 3).join(", ")} on your plan.`;
+  }
+  if (interestScore > 0) {
+    return "Matches the specialties you rated highest on Reflect.";
+  }
+  return "Based on your interests.";
 }
 
 /**
@@ -180,21 +202,29 @@ export function rankCareersForStudent({
 
   const takenScores = scoreCareersFromCourses(taken);
   const plannedScores = scoreCareersFromCourses(planned);
+  const interestRatings = reflectAnswers.interestRatings || {};
 
   const matched = careers
     .map((career) => {
       const fromTaken = takenScores.get(career.role);
       const fromPlan = plannedScores.get(career.role);
-      if (!fromTaken && !fromPlan) return null;
+      const interestScore = interestScoreForRole(career.role, interestRatings);
+      if (!fromTaken && !fromPlan && !interestScore) return null;
       const takenCourses = fromTaken?.courses || [];
       const supportingCourses = fromPlan?.courses || [];
       return {
         ...career,
-        score: (fromTaken?.score || 0) + (fromPlan?.score || 0),
+        score: (fromTaken?.score || 0) + (fromPlan?.score || 0) + interestScore,
         takenScore: fromTaken?.score || 0,
+        interestScore,
         takenCourses,
         supportingCourses,
-        matchReason: buildMatchReason(takenCourses, supportingCourses, courseTitles),
+        matchReason: buildMatchReason(
+          takenCourses,
+          supportingCourses,
+          courseTitles,
+          interestScore
+        ),
       };
     })
     .filter(Boolean)
@@ -202,6 +232,7 @@ export function rankCareersForStudent({
       (a, b) =>
         b.score - a.score ||
         b.takenScore - a.takenScore ||
+        (b.interestScore || 0) - (a.interestScore || 0) ||
         a.role.localeCompare(b.role)
     );
 
