@@ -72,10 +72,10 @@ export default function RatingRow({
                   type="button"
                   aria-label={`${rating} out of 5`}
                   onClick={() => onChange(rating)}
-                  className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full border text-sm font-semibold transition-colors"
+                  className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full border text-sm font-semibold transition-colors ${active || !isDark ? "" : "glass-chip"}`}
                   style={{
                     borderColor: active ? GOLD : idleBorder,
-                    background: active ? GOLD : "transparent",
+                    background: active ? GOLD : isDark ? undefined : "transparent",
                     color: active ? INK : isDark ? "#FFFFFF" : INK,
                   }}
                 >

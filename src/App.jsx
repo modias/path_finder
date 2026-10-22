@@ -32,7 +32,7 @@ import {
   REFLECT_CREDIT_LOAD_OPTIONS,
 } from "./data/curriculum";
 
-const PAGE_BG = "#00543C";
+const PAGE_BG = "#FFFFFF";
 const INK = "#0B2E22";
 const GOLD = "#B3A369";
 const GOLD_DEEP = "#8C7F4B";
@@ -73,15 +73,15 @@ function Stepper({ step, setStep }) {
           <span
             className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold shrink-0"
             style={{
-              background: i < step ? GOLD : i === step ? "#FFFFFF" : "transparent",
-              color: i <= step ? INK : "#FFFFFF",
-              border: `1.5px solid ${i <= step ? GOLD : "#FFFFFF"}`,
+              background: i < step ? GOLD : i === step ? GREEN : "transparent",
+              color: i < step ? INK : i === step ? "#FFFFFF" : MUTED,
+              border: `1.5px solid ${i < step ? GOLD : i === step ? GREEN : "#DCDACD"}`,
             }}
           >
             {i < step ? <Check size={14} /> : i + 1}
           </span>
-          <span className="text-sm hidden sm:inline" style={{ color: "#FFFFFF" }}>{label}</span>
-          {i < steps.length - 1 && <span className="w-6 sm:w-10 h-px mx-1" style={{ background: "#FFFFFF", opacity: 0.35 }} />}
+          <span className="text-sm hidden sm:inline" style={{ color: i <= step ? INK : MUTED }}>{label}</span>
+          {i < steps.length - 1 && <span className="w-6 sm:w-10 h-px mx-1" style={{ background: "#DCDACD" }} />}
         </button>
       ))}
     </div>
@@ -105,9 +105,9 @@ function MultiSelectDropdown({
         {prompt}
       </p>
       <div
-        className="relative w-full max-w-xl rounded-[22px]"
+        className="glass-chip relative w-full max-w-xl rounded-[22px]"
         style={{
-          border: `1.5px solid ${hasValue || open ? GOLD : "rgba(255,255,255,0.4)"}`,
+          border: `1.5px solid ${hasValue || open ? GOLD : "rgba(255,255,255,0.28)"}`,
         }}
       >
         <button
@@ -162,11 +162,11 @@ function MultiSelectDropdown({
                 role="option"
                 aria-selected={isSelected}
                 onClick={() => onToggle(option.key)}
-                className="inline-flex items-center gap-1.5 text-sm pl-3 py-1.5 rounded-full"
+                className={`inline-flex items-center gap-1.5 text-sm pl-3 py-1.5 rounded-full ${isSelected ? "" : "glass-chip"}`}
                 style={{
-                  background: isSelected ? GOLD : "transparent",
+                  background: isSelected ? GOLD : undefined,
                   color: isSelected ? INK : "#FFFFFF",
-                  border: `1.5px solid ${isSelected ? GOLD : "rgba(255,255,255,0.45)"}`,
+                  border: `1.5px solid ${isSelected ? GOLD : "rgba(255,255,255,0.28)"}`,
                   paddingRight: isSelected ? "0.5rem" : "0.75rem",
                 }}
               >
@@ -205,14 +205,14 @@ function ReflectStep({
   return (
     <div>
       <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>Step one</p>
-      <h1 className="text-4xl sm:text-5xl mb-3 leading-tight" style={{ fontFamily: "Georgia, serif", color: "#FFFFFF" }}>
+      <h1 className="text-4xl sm:text-5xl mb-3 leading-tight" style={{ fontFamily: "Georgia, serif", color: INK }}>
         Before the data,<br />a little about you.
       </h1>
-      <p className="text-base mb-10 max-w-xl" style={{ color: ON_DARK_MUTED }}>
+      <p className="text-base mb-10 max-w-xl" style={{ color: MUTED }}>
         Rate each area honestly — there&apos;s no wrong answer. Your ratings shape which electives we highlight and recommend, not which ones you&apos;re allowed to take.
       </p>
 
-      <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(11,46,34,0.55)", border: "1px solid rgba(179,163,105,0.35)" }}>
+      <div className="glass-panel rounded-2xl p-6 mb-8">
         <div className="flex items-center gap-2 mb-5">
           <Heart size={18} color={GOLD} />
           <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
@@ -231,7 +231,7 @@ function ReflectStep({
         ))}
       </div>
 
-      <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(11,46,34,0.55)", border: "1px solid rgba(179,163,105,0.35)" }}>
+      <div className="glass-panel rounded-2xl p-6 mb-8">
         <div className="flex items-center gap-2 mb-5">
           <Compass size={18} color={GOLD} />
           <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
@@ -252,7 +252,7 @@ function ReflectStep({
         ))}
       </div>
 
-      <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(11,46,34,0.55)", border: "1px solid rgba(179,163,105,0.35)" }}>
+      <div className="glass-panel rounded-2xl p-6 mb-8">
         <div className="flex items-center gap-2 mb-5">
           <BarChart3 size={18} color={GOLD} />
           <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
@@ -335,10 +335,10 @@ function ExploreStep({
       <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>
         Step two
       </p>
-      <h1 className="text-4xl sm:text-5xl mb-3 leading-tight" style={{ fontFamily: "Georgia, serif", color: "#FFFFFF" }}>
+      <h1 className="text-4xl sm:text-5xl mb-3 leading-tight" style={{ fontFamily: "Georgia, serif", color: INK }}>
         Explore courses.
       </h1>
-      <p className="text-base mb-8 max-w-2xl" style={{ color: ON_DARK_MUTED }}>
+      <p className="text-base mb-8 max-w-2xl" style={{ color: MUTED }}>
         See what the major requires, then pick an elective pathway to see matching courses.
       </p>
 
@@ -361,10 +361,10 @@ function RoadmapStep({ reflectAnswers, recommendations, onAskAdvisor }) {
       <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>
         Step three
       </p>
-      <h1 className="text-4xl sm:text-5xl mb-3 leading-tight" style={{ fontFamily: "Georgia, serif", color: "#FFFFFF" }}>
+      <h1 className="text-4xl sm:text-5xl mb-3 leading-tight" style={{ fontFamily: "Georgia, serif", color: INK }}>
         Your plan.
       </h1>
-      <p className="text-base mb-8 max-w-2xl" style={{ color: ON_DARK_MUTED }}>
+      <p className="text-base mb-8 max-w-2xl" style={{ color: MUTED }}>
         {showSuggestedElectives
           ? "Suggested electives based on your Reflect answers."
           : "Answer the Reflect questions to see suggested electives."}
@@ -375,7 +375,7 @@ function RoadmapStep({ reflectAnswers, recommendations, onAskAdvisor }) {
           type="button"
           onClick={onAskAdvisor}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold"
-          style={{ background: "transparent", color: "#FFFFFF", border: "1.5px solid rgba(255,255,255,0.45)" }}
+          style={{ background: "transparent", color: INK, border: "1.5px solid #DCDACD" }}
         >
           Ask your advisor
         </button>
@@ -506,10 +506,10 @@ function CareersStep({ flipped, toggleFlip, recommendations, reflectAnswers }) {
   return (
     <div>
       <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>Step four</p>
-      <h1 className="text-4xl sm:text-5xl mb-3 leading-tight" style={{ fontFamily: "Georgia, serif", color: "#FFFFFF" }}>
+      <h1 className="text-4xl sm:text-5xl mb-3 leading-tight" style={{ fontFamily: "Georgia, serif", color: INK }}>
         Where your courses lead.
       </h1>
-      <p className="text-base mb-8 max-w-xl" style={{ color: ON_DARK_MUTED }}>
+      <p className="text-base mb-8 max-w-xl" style={{ color: MUTED }}>
         {takenCodes.length || plannedCodes.length
           ? `These roles build on the classes you've taken${takenCodes.length ? ` (${listCodes(takenCodes)})` : ""}${plannedCodes.length ? ` and the ones on your plan (${listCodes(plannedCodes)})` : ""}. Strongest match first — flip a card for what they do, pay, and who hires for it.`
           : "These roles are inferred from your interests for now. Get course recommendations on Reflect to tailor careers to classes you'll take."}
@@ -519,7 +519,7 @@ function CareersStep({ flipped, toggleFlip, recommendations, reflectAnswers }) {
           <CareerCard key={c.role} career={c} flipped={flipped.has(i)} onToggle={() => toggleFlip(i)} />
         ))}
       </div>
-      <p className="text-[11px]" style={{ color: ON_DARK_MUTED }}>
+      <p className="text-[11px]" style={{ color: MUTED }}>
         Salary ranges are approximate entry-level, U.S. national figures — actual pay varies by employer and location.
       </p>
     </div>
@@ -623,7 +623,7 @@ export default function App() {
   };
 
   return (
-    <div className="w-full min-h-screen" style={{ background: PAGE_BG }}>
+    <div className="w-full min-h-screen relative overflow-x-hidden" style={{ background: PAGE_BG }}>
       <style>{`
         .flip-card { perspective: 1200px; height: 340px; cursor: pointer; }
         .flip-inner { position: relative; width: 100%; height: 100%; transition: transform 0.5s; transform-style: preserve-3d; box-shadow: 0 6px 16px rgba(0,0,0,0.18); border-radius: 16px; }
@@ -633,17 +633,35 @@ export default function App() {
         @media (hover: hover) {
           .flip-card:hover .flip-inner { transform: rotateY(180deg); }
         }
+        .glass-panel {
+          background: linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(11,46,34,0.78) 14%, rgba(8,36,26,0.82) 100%);
+          backdrop-filter: blur(32px) saturate(180%);
+          -webkit-backdrop-filter: blur(32px) saturate(180%);
+          border: 1px solid rgba(255,255,255,0.28);
+          box-shadow: 0 20px 60px rgba(11,46,34,0.16), inset 0 1px 0 rgba(255,255,255,0.38), inset 0 -1px 0 rgba(0,0,0,0.18);
+        }
+        .glass-chip {
+          background: rgba(255,255,255,0.08);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+        }
       `}</style>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        <div className="absolute -top-24 right-[-10%] w-[520px] h-[520px] rounded-full" style={{ background: "rgba(31,122,84,0.32)", filter: "blur(90px)" }} />
+        <div className="absolute top-[28%] -left-32 w-[460px] h-[460px] rounded-full" style={{ background: "rgba(179,163,105,0.28)", filter: "blur(100px)" }} />
+        <div className="absolute bottom-[-8%] right-[18%] w-[380px] h-[380px] rounded-full" style={{ background: "rgba(11,46,34,0.16)", filter: "blur(80px)" }} />
+      </div>
 
-      <div className={`mx-auto px-6 py-14 ${step === 0 || step === 1 || step === 2 ? "max-w-7xl" : "max-w-5xl"}`}>
+      <div className={`relative z-10 mx-auto px-6 py-14 ${step === 0 || step === 1 || step === 2 ? "max-w-7xl" : "max-w-5xl"}`}>
         <div className="flex items-center justify-between gap-4 mb-8">
           <Link to="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
             <img
-              src="/unc-charlotte-logo.png?v=5"
+              src="/unc-charlotte-logo.png?v=7"
               alt="University of North Carolina Charlotte"
               className="h-12 sm:h-14 w-auto object-contain"
             />
-            <span className="text-xs tracking-widest uppercase" style={{ color: ON_DARK_MUTED, fontFamily: "ui-monospace, monospace" }}>
+            <span className="text-xs tracking-widest uppercase" style={{ color: MUTED, fontFamily: "ui-monospace, monospace" }}>
               School of Data Science
             </span>
           </Link>
@@ -652,11 +670,11 @@ export default function App() {
               type="button"
               onClick={() => navigate(-1)}
               className="flex items-center gap-2 text-sm hover:opacity-90 transition-opacity"
-              style={{ color: "#FFFFFF" }}
+              style={{ color: INK }}
             >
               <ArrowLeft size={16} /> Back
             </button>
-            <Link to="/" className="flex items-center gap-2 text-sm" style={{ color: "#FFFFFF" }}>
+            <Link to="/" className="flex items-center gap-2 text-sm" style={{ color: INK }}>
               <Home size={16} /> Home
             </Link>
           </div>
@@ -714,7 +732,7 @@ export default function App() {
 
         <div className="flex items-center justify-between mt-12">
           {step > 0 ? (
-            <button onClick={() => setStep(step - 1)} className="flex items-center gap-2 text-sm" style={{ color: "#FFFFFF" }}>
+            <button onClick={() => setStep(step - 1)} className="flex items-center gap-2 text-sm" style={{ color: INK }}>
               <ArrowLeft size={16} /> Back
             </button>
           ) : <span />}
