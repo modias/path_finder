@@ -8,12 +8,10 @@ import { courseKey, normalizeCode } from "../data/prerequisites.js";
 
 /**
  * Build the mock student record from course history.
+ * Intentionally reads only the fixed curriculum mock so recommendations stay
+ * on a single student story.
  * @returns {StudentRecord}
  */
-// Intentionally reads only the fixed curriculum mock, not the register-courses
-// localStorage schedule. This keeps the recommend API on a fixed student
-// story and avoids mid-session eligibility changes. Wiring the schedule in
-// is a deliberate product decision for later, not something to "fix" here.
 export function buildStudentRecord() {
   /** @type {Set<string>} */
   const completed = new Set();

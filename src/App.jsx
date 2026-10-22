@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Sparkles, ArrowRight, ArrowLeft, Check,
+  Sparkles, ArrowRight, ArrowLeft, Check, X,
   BarChart3, Database, Cpu, LineChart, ShieldCheck, Users, Star, ChevronDown,
   Home, Heart, Compass, BrainCircuit,
 } from "lucide-react";
@@ -27,7 +27,6 @@ import CoreRequirementsOverview from "./components/CoreRequirementsOverview";
 import ElectivesPanel from "./components/ElectivesPanel";
 import CourseAdvisor from "./components/CourseAdvisor";
 import {
-  STAGES,
   CAREERS as CAREER_DATA,
   REFLECT_TERM_OPTIONS,
   REFLECT_CREDIT_LOAD_OPTIONS,
@@ -41,7 +40,6 @@ const GREEN = "#1F7A54";
 const SURFACE = "#FFFFFF";
 const MUTED = "#5B6660";
 const ON_DARK_MUTED = "#BFD9CB";
-const SUPPORT_TINT = "#EEF0EA";
 
 const DEFAULT_REGISTER_TERM = REFLECT_TERM_OPTIONS[0] || "";
 const DEFAULT_CREDIT_LOAD = REFLECT_CREDIT_LOAD_OPTIONS[1] || "";
@@ -90,54 +88,95 @@ function Stepper({ step, setStep }) {
   );
 }
 
-function PickChipGroup({
-  title,
-  hint,
+function MultiSelectDropdown({
+  prompt,
   options,
   selected,
   onToggle,
-  max,
+  placeholder = "Select as many as you like",
 }) {
-  const atMax = max != null && selected.length >= max;
+  const [open, setOpen] = useState(false);
+  const hasValue = selected.length > 0;
+  const selectedOptions = options.filter((option) => selected.includes(option.key));
+
   return (
-    <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(11,46,34,0.55)", border: "1px solid rgba(179,163,105,0.35)" }}>
-      <div className="flex items-center gap-2 mb-4">
-        <BarChart3 size={18} color={GOLD} />
-        <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
-          {title}
-        </h3>
-      </div>
-      <p className="text-sm mb-4" style={{ color: ON_DARK_MUTED }}>
-        {hint}
-        {max != null && (
-          <span>
-            {" "}
-            ({selected.length}/{max})
-          </span>
-        )}
+    <div className="mb-5 last:mb-0">
+      <p className="text-sm font-medium mb-2" style={{ color: "#FFFFFF" }}>
+        {prompt}
       </p>
-      <div className="flex flex-wrap gap-2">
-        {options.map((option) => {
-          const isSelected = selected.includes(option.key);
-          const disabled = atMax && !isSelected;
-          return (
-            <button
-              key={option.key}
-              type="button"
-              onClick={() => onToggle(option.key)}
-              disabled={disabled}
-              className="text-sm px-3 py-1.5 rounded-full transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{
-                background: isSelected ? GOLD : "transparent",
-                color: isSelected ? INK : "#FFFFFF",
-                border: `1.5px solid ${isSelected ? GOLD : "rgba(255,255,255,0.45)"}`,
-              }}
-            >
-              {option.label}
-            </button>
-          );
-        })}
+      <div
+        className="relative w-full max-w-xl rounded-[22px]"
+        style={{
+          border: `1.5px solid ${hasValue || open ? GOLD : "rgba(255,255,255,0.4)"}`,
+        }}
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          aria-label={prompt}
+          onClick={() => setOpen((prev) => !prev)}
+          className="absolute inset-0 rounded-[22px]"
+        />
+        <div className="relative z-10 flex flex-wrap items-center gap-1.5 min-h-[42px] pl-2.5 pr-10 py-1.5 pointer-events-none">
+          {hasValue ? (
+            selectedOptions.map((option) => (
+              <span
+                key={option.key}
+                className="inline-flex items-center gap-1 text-sm pl-3 pr-1 py-1 rounded-full pointer-events-auto"
+                style={{ background: GOLD, color: INK }}
+              >
+                {option.label}
+                <button
+                  type="button"
+                  aria-label={`Remove ${option.label}`}
+                  onClick={() => onToggle(option.key)}
+                  className="flex items-center justify-center w-5 h-5 rounded-full"
+                >
+                  <X size={12} strokeWidth={2.5} />
+                </button>
+              </span>
+            ))
+          ) : (
+            <span className="pl-1.5 text-sm" style={{ color: ON_DARK_MUTED }}>
+              {placeholder}
+            </span>
+          )}
+        </div>
+        <ChevronDown
+          size={16}
+          color={hasValue || open ? GOLD : "#FFFFFF"}
+          className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 transition-transform duration-200"
+          style={{ transform: open ? "translateY(-50%) rotate(180deg)" : "translateY(-50%)" }}
+          aria-hidden="true"
+        />
       </div>
+      {open && (
+        <div className="flex flex-wrap gap-2 mt-3" role="listbox" aria-multiselectable="true" aria-label={prompt}>
+          {options.map((option) => {
+            const isSelected = selected.includes(option.key);
+            return (
+              <button
+                key={option.key}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => onToggle(option.key)}
+                className="inline-flex items-center gap-1.5 text-sm pl-3 py-1.5 rounded-full"
+                style={{
+                  background: isSelected ? GOLD : "transparent",
+                  color: isSelected ? INK : "#FFFFFF",
+                  border: `1.5px solid ${isSelected ? GOLD : "rgba(255,255,255,0.45)"}`,
+                  paddingRight: isSelected ? "0.5rem" : "0.75rem",
+                }}
+              >
+                {option.label}
+                {isSelected && <X size={12} strokeWidth={2.5} aria-hidden="true" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -207,48 +246,44 @@ function ReflectStep({
             highLabel={question.highLabel}
             value={styleRatings[question.key] ?? null}
             onChange={(rating) => setStyleRating(question.key, rating)}
+            input={question.input}
+            options={question.options}
           />
         ))}
       </div>
 
-      <p className="text-xs tracking-widest uppercase mb-3" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>
-        Section C — Topics, skills &amp; outcomes
-      </p>
-
-      <PickChipGroup
-        title="Which topics do you actually enjoy?"
-        hint="Pick up to 4."
-        options={TOPIC_OPTIONS}
-        selected={topicsEnjoyed}
-        onToggle={toggleTopic}
-        max={4}
-      />
-
-      <PickChipGroup
-        title="Which skills do you already have?"
-        hint="Optional — pick any that apply."
-        options={SKILL_OPTIONS}
-        selected={skillsHave}
-        onToggle={toggleSkillHave}
-      />
-
-      <PickChipGroup
-        title="Which skills do you want to walk out of UNC Charlotte with?"
-        hint="Pick up to 6."
-        options={SKILL_OPTIONS}
-        selected={skillsWant}
-        onToggle={toggleSkillWant}
-        max={6}
-      />
-
-      <PickChipGroup
-        title="What do you want to be able to show an employer?"
-        hint="Pick up to 3."
-        options={DELIVERABLE_OPTIONS}
-        selected={deliverables}
-        onToggle={toggleDeliverable}
-        max={3}
-      />
+      <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(11,46,34,0.55)", border: "1px solid rgba(179,163,105,0.35)" }}>
+        <div className="flex items-center gap-2 mb-5">
+          <BarChart3 size={18} color={GOLD} />
+          <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
+            Section C — Topics, skills &amp; outcomes
+          </h3>
+        </div>
+        <MultiSelectDropdown
+          prompt="Which topics do you actually enjoy?"
+          options={TOPIC_OPTIONS}
+          selected={topicsEnjoyed}
+          onToggle={toggleTopic}
+        />
+        <MultiSelectDropdown
+          prompt="Which skills do you already have?"
+          options={SKILL_OPTIONS}
+          selected={skillsHave}
+          onToggle={toggleSkillHave}
+        />
+        <MultiSelectDropdown
+          prompt="Which skills do you want to walk out of UNC Charlotte with?"
+          options={SKILL_OPTIONS}
+          selected={skillsWant}
+          onToggle={toggleSkillWant}
+        />
+        <MultiSelectDropdown
+          prompt="What do you want to be able to show an employer?"
+          options={DELIVERABLE_OPTIONS}
+          selected={deliverables}
+          onToggle={toggleDeliverable}
+        />
+      </div>
 
       <div className="rounded-2xl p-6 mb-8" style={{ background: SURFACE }}>
         <div className="flex items-center gap-2 mb-4">
@@ -288,49 +323,6 @@ function ReflectStep({
   );
 }
 
-function CourseCard({ course, recommended }) {
-  const isCore = course.kind === "core";
-  const statusMeta = {
-    completed: { label: "Completed", bg: "#E8F5EE", color: GREEN },
-    in_progress: { label: "In progress", bg: "#FFF8E8", color: "#C47A20" },
-    remaining: { label: "Still needed", bg: "#F5F6F1", color: MUTED },
-  }[course.status];
-
-  return (
-    <div
-      className="rounded-xl p-4 mb-3 last:mb-0"
-      style={{ background: isCore ? SURFACE : SUPPORT_TINT, border: `1px solid ${isCore ? GREEN : "#DCDACD"}` }}
-    >
-      <div className="flex items-center justify-between mb-2 gap-2">
-        {statusMeta ? (
-          <span
-            className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full font-semibold"
-            style={{ background: statusMeta.bg, color: statusMeta.color }}
-          >
-            {statusMeta.label}
-          </span>
-        ) : (
-          <span
-            className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full"
-            style={{ background: isCore ? GREEN : "#DCDACD", color: isCore ? "#fff" : INK }}
-          >
-            {isCore ? "Core studio" : "Support"}
-          </span>
-        )}
-        <span className="text-[11px] shrink-0" style={{ color: GOLD_DEEP }}>{course.hrs} hrs</span>
-      </div>
-      <p className="text-[11px] mb-0.5" style={{ fontFamily: "ui-monospace, monospace", color: MUTED }}>{course.code}</p>
-      <h4 className="text-sm font-semibold mb-1" style={{ color: INK }}>{course.name}</h4>
-      <p className="text-xs leading-relaxed" style={{ color: MUTED }}>{course.blurb}</p>
-      {recommended && (
-        <p className="text-[11px] font-semibold mt-2 flex items-center gap-1" style={{ color: GOLD_DEEP }}>
-          <Star size={11} fill={GOLD_DEEP} /> Recommended for you
-        </p>
-      )}
-    </div>
-  );
-}
-
 function ExploreStep({
   recommendations,
   recommendLoading,
@@ -351,7 +343,6 @@ function ExploreStep({
       </p>
 
       <CoreRequirementsOverview
-        registerPath="/register-courses"
         recommendations={recommendations}
         recommendLoading={recommendLoading}
         recommendError={recommendError}
@@ -363,15 +354,7 @@ function ExploreStep({
 }
 
 function RoadmapStep({ reflectAnswers, recommendations, onAskAdvisor }) {
-  const [openStages, setOpenStages] = useState(new Set());
-
-  const toggleStage = (title) => {
-    setOpenStages((prev) => {
-      const next = new Set(prev);
-      next.has(title) ? next.delete(title) : next.add(title);
-      return next;
-    });
-  };
+  const showSuggestedElectives = !validateReflectAnswersForRecommendations(reflectAnswers);
 
   return (
     <div>
@@ -382,7 +365,9 @@ function RoadmapStep({ reflectAnswers, recommendations, onAskAdvisor }) {
         Your plan.
       </h1>
       <p className="text-base mb-8 max-w-2xl" style={{ color: ON_DARK_MUTED }}>
-        Electives worth a look, and the road through the major.
+        {showSuggestedElectives
+          ? "Suggested electives based on your Reflect answers."
+          : "Answer the Reflect questions to see suggested electives."}
       </p>
 
       <div className="flex flex-wrap gap-3 mb-8">
@@ -396,56 +381,9 @@ function RoadmapStep({ reflectAnswers, recommendations, onAskAdvisor }) {
         </button>
       </div>
 
-      <ElectivesPanel reflectAnswers={reflectAnswers} recommendations={recommendations} />
-
-      <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>
-        The road through the major
-      </p>
-      <h2 className="text-3xl sm:text-4xl mb-3 leading-tight" style={{ fontFamily: "Georgia, serif", color: "#FFFFFF" }}>
-        Four stages, roughly one per year.
-      </h2>
-      <p className="text-base mb-8 max-w-2xl" style={{ color: ON_DARK_MUTED }}>
-        Click a year to see its courses. Green cards are the required studio sequence (18 hrs); the rest are the computing and math courses that support it (31 hrs combined).
-      </p>
-
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {STAGES.map((stage) => {
-          const isOpen = openStages.has(stage.title);
-          return (
-            <div key={stage.title}>
-              <button
-                type="button"
-                onClick={() => toggleStage(stage.title)}
-                aria-expanded={isOpen}
-                className="w-full rounded-xl px-4 py-3 mb-3 text-left transition-colors"
-                style={{
-                  background: INK,
-                  border: `1.5px solid ${isOpen ? GOLD : "transparent"}`,
-                }}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest" style={{ color: GOLD }}>{stage.note}</p>
-                    <h3 className="text-lg" style={{ fontFamily: "Georgia, serif", color: "#FFFFFF" }}>{stage.title}</h3>
-                    <p className="text-[10px] mt-1" style={{ color: ON_DARK_MUTED }}>
-                      {isOpen ? `${stage.courses.length} courses` : "Click to see courses"}
-                    </p>
-                  </div>
-                  <ChevronDown
-                    size={18}
-                    color={GOLD}
-                    className="shrink-0 mt-1 transition-transform duration-200"
-                    style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}
-                  />
-                </div>
-              </button>
-              {isOpen && stage.courses.map((c) => (
-                <CourseCard key={c.code} course={c} />
-              ))}
-            </div>
-          );
-        })}
-      </div>
+      {showSuggestedElectives && (
+        <ElectivesPanel reflectAnswers={reflectAnswers} recommendations={recommendations} />
+      )}
     </div>
   );
 }
@@ -627,18 +565,17 @@ export default function App() {
     setStyleRatings((prev) => ({ ...prev, [key]: rating }));
   };
 
-  const toggleInList = (setter, max) => (key) => {
+  const toggleInList = (setter) => (key) => {
     setter((prev) => {
       if (prev.includes(key)) return prev.filter((item) => item !== key);
-      if (max != null && prev.length >= max) return prev;
       return [...prev, key];
     });
   };
 
-  const toggleTopic = toggleInList(setTopicsEnjoyed, 4);
+  const toggleTopic = toggleInList(setTopicsEnjoyed);
   const toggleSkillHave = toggleInList(setSkillsHave);
-  const toggleSkillWant = toggleInList(setSkillsWant, 6);
-  const toggleDeliverable = toggleInList(setDeliverables, 3);
+  const toggleSkillWant = toggleInList(setSkillsWant);
+  const toggleDeliverable = toggleInList(setDeliverables);
 
   const toggleFlip = (i) => {
     setFlipped((prev) => {

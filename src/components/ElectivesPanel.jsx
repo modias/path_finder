@@ -2,13 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Star } from "lucide-react";
 import {
   MAX_DISPLAYED_ELECTIVES,
-  PINNED_ELECTIVE_COUNT,
-  SWAP_ELECTIVE_COUNT,
   buildElectivesForCodes,
   buildInitialElectiveCodes,
-  hasReflectAnswers,
-  pickAlternateElectives,
+  pickReplacementElective,
 } from "../lib/trackedElectives";
+import { validateReflectAnswersForRecommendations } from "../lib/reflectScoring";
 import { normalizeCode } from "../data/prerequisites";
 
 const INK = "#0B2E22";
@@ -16,7 +14,6 @@ const GOLD_DEEP = "#8C7F4B";
 const GREEN = "#1F7A54";
 const SURFACE = "#FFFFFF";
 const MUTED = "#5B6660";
-const SUPPORT_TINT = "#F5F6F1";
 
 /**
  * @param {number} percent
@@ -34,15 +31,12 @@ function ElectiveCard({ course, onRefresh, showRefresh }) {
     remaining: { label: "Still needed", bg: "#F5F6F1", color: MUTED },
   }[course.status];
   const percent = Number.isFinite(course.matchPercent) ? course.matchPercent : null;
-  const matchStyle = percent != null ? matchColors(percent) : null;
+  const matchStyle = percent != null ? matchColors(percent) : { bg: "#F5F6F1", color: MUTED };
 
   return (
     <div
       className="rounded-xl p-4"
-      style={{
-        background: SUPPORT_TINT,
-        border: "1px solid #DCDACD",
-      }}
+      style={{ background: SURFACE, border: `1px solid ${matchStyle.color}33` }}
     >
       <div className="flex items-center justify-between mb-2 gap-2">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
@@ -54,7 +48,7 @@ function ElectiveCard({ course, onRefresh, showRefresh }) {
               {statusMeta.label}
             </span>
           )}
-          {percent != null && matchStyle && (
+          {percent != null && (
             <span
               className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full font-semibold"
               style={{ background: matchStyle.bg, color: matchStyle.color }}
@@ -88,7 +82,7 @@ function ElectiveCard({ course, onRefresh, showRefresh }) {
           className="text-[11px] font-semibold mt-2 flex items-center gap-1.5 transition-opacity hover:opacity-80"
           style={{ color: MUTED }}
         >
-          <RefreshCw size={11} /> Show 2 other electives
+          <RefreshCw size={11} /> Show other electives
         </button>
       )}
     </div>
@@ -96,16 +90,15 @@ function ElectiveCard({ course, onRefresh, showRefresh }) {
 }
 
 /**
- * Electives section for the plan step — the student's top electives by Reflect
- * match (or the plan's tracked electives before they answer), with status from
- * the student record, catalog metadata from courseCatalog.js, and badges gated
- * on both reflect scores and real eligibility. Shows four cards; the top two
- * stay pinned and the bottom two can be swapped for another pair. Descriptions
- * use the syllabus-grounded reason from `recommendations` when one exists for a
- * course, otherwise the catalog blurb.
+ * Suggested electives for the plan step — the student's top electives by Reflect
+ * match. Hidden until every Section A and B rating is answered. Status comes
+ * from the student record, catalog metadata from courseCatalog.js, and badges
+ * are gated on both reflect scores and real eligibility. Shows four cards;
+ * refreshing a card replaces only that course with the next ranked elective.
+ * Descriptions use the syllabus-grounded reason from `recommendations` when one
+ * exists for a course, otherwise the catalog blurb.
  */
 export default function ElectivesPanel({ reflectAnswers = {}, recommendations = [] }) {
-  const personalized = hasReflectAnswers(reflectAnswers);
   const [displayedCodes, setDisplayedCodes] = useState(() =>
     buildInitialElectiveCodes(reflectAnswers)
   );
@@ -136,74 +129,57 @@ export default function ElectivesPanel({ reflectAnswers = {}, recommendations = 
       .slice(0, MAX_DISPLAYED_ELECTIVES);
   }, [displayedCodes, reflectAnswers, recommendations]);
 
-  const nextPair = useMemo(() => {
-    const pinned = displayedCodes.slice(0, PINNED_ELECTIVE_COUNT);
-    const currentBottom = displayedCodes.slice(PINNED_ELECTIVE_COUNT);
-    const excludeUsed = [...pinned, ...retiredCodes, ...currentBottom];
-    const fromUnused = pickAlternateElectives({
-      excludeCodes: excludeUsed,
-      reflectAnswers,
-      count: SWAP_ELECTIVE_COUNT,
-    });
-    if (fromUnused.length >= SWAP_ELECTIVE_COUNT) {
-      return { courses: fromUnused, wrap: false };
+  const replacements = useMemo(() => {
+    const map = new Map();
+    for (const course of orderedElectives) {
+      const result = pickReplacementElective({
+        displayedCodes,
+        codeToReplace: course.code,
+        retiredCodes,
+        reflectAnswers,
+      });
+      if (result?.course) map.set(normalizeCode(course.code), result);
     }
-    const wrapped = pickAlternateElectives({
-      excludeCodes: displayedCodes,
-      reflectAnswers,
-      count: SWAP_ELECTIVE_COUNT,
-    });
-    return { courses: wrapped, wrap: true };
-  }, [displayedCodes, reflectAnswers, retiredCodes]);
+    return map;
+  }, [orderedElectives, displayedCodes, reflectAnswers, retiredCodes]);
 
-  const canRefreshBottom =
-    orderedElectives.length > PINNED_ELECTIVE_COUNT &&
-    nextPair.courses.length >= SWAP_ELECTIVE_COUNT;
+  function handleRefresh(code) {
+    const result = replacements.get(normalizeCode(code));
+    if (!result?.course) return;
+    const replacing = normalizeCode(code);
+    const nextCode = result.course.code;
 
-  function handleRefreshBottom() {
-    if (!canRefreshBottom) return;
-    const pinned = displayedCodes.slice(0, PINNED_ELECTIVE_COUNT);
-    const currentBottom = displayedCodes.slice(PINNED_ELECTIVE_COUNT);
-    const nextCodes = nextPair.courses.map((course) => course.code);
-
-    setDisplayedCodes([...pinned, ...nextCodes].slice(0, MAX_DISPLAYED_ELECTIVES));
-    setRetiredCodes(nextPair.wrap ? [...currentBottom] : [...retiredCodes, ...currentBottom]);
+    setDisplayedCodes(
+      displayedCodes.map((current) => (normalizeCode(current) === replacing ? nextCode : current))
+    );
+    setRetiredCodes(
+      result.wrap
+        ? [replacing]
+        : [...retiredCodes, replacing]
+    );
   }
+
+  if (validateReflectAnswersForRecommendations(reflectAnswers)) return null;
 
   return (
     <div className="rounded-2xl p-6 mb-10" style={{ background: SURFACE, border: "1px solid #E4E1D4" }}>
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-1">
-        <div className="flex items-center gap-2 min-w-0">
-          <Star size={16} color={GOLD_DEEP} className="shrink-0" />
-          <h3 className="text-lg" style={{ fontFamily: "Georgia, serif", color: INK }}>
-            Electives worth a look
-          </h3>
-        </div>
-        {canRefreshBottom && (
-          <button
-            type="button"
-            onClick={handleRefreshBottom}
-            className="text-[12px] font-semibold flex items-center gap-1.5 shrink-0 self-start transition-opacity hover:opacity-80"
-            style={{ color: GREEN }}
-          >
-            <RefreshCw size={13} /> Show 2 other electives
-          </button>
-        )}
+      <div className="flex items-center gap-2 mb-1">
+        <Star size={16} color={GOLD_DEEP} className="shrink-0" />
+        <h3 className="text-lg" style={{ fontFamily: "Georgia, serif", color: INK }}>
+          Suggested electives
+        </h3>
       </div>
       <p className="text-sm mb-4" style={{ color: MUTED }}>
-        {personalized
-          ? "Your four best-matching electives, ranked by your Reflect answers."
-          : "Electives from your plan. Answer the Reflect questions to rank these by your interests."}{" "}
-        &ldquo;Recommended for you&rdquo; only appears when you&apos;re currently eligible and your answers point to the course. Completed courses are hidden. The top two stay put; refresh the bottom two for another pair.
+        Suggested electives based on your Reflect answers. &ldquo;Recommended for you&rdquo; only appears when you&apos;re currently eligible and your answers point to the course. Completed courses are hidden. Refresh a card to see another matching elective without changing the rest.
       </p>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        {orderedElectives.map((course, index) => (
+        {orderedElectives.map((course) => (
           <ElectiveCard
             key={course.code}
             course={course}
-            showRefresh={canRefreshBottom && index >= PINNED_ELECTIVE_COUNT}
-            onRefresh={handleRefreshBottom}
+            showRefresh={replacements.has(course.code)}
+            onRefresh={() => handleRefresh(course.code)}
           />
         ))}
       </div>

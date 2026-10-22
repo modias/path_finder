@@ -19,10 +19,10 @@ export const LOW_MATCH_REFRESH_PERCENT = GOOD_OPTION_PERCENT;
 /** Max elective cards shown in ElectivesPanel. */
 export const MAX_DISPLAYED_ELECTIVES = 4;
 
-/** Top cards stay pinned; refresh only replaces the bottom pair. */
+/** Historical pin count; the panel now refreshes one clicked card at a time. */
 export const PINNED_ELECTIVE_COUNT = 2;
 
-/** How many electives a refresh swap brings in. */
+/** Historical pair-swap size. Single-card refresh uses `pickReplacementElective`. */
 export const SWAP_ELECTIVE_COUNT = 2;
 
 /** @type {Map<string, import("../data/courseCatalog.js").CatalogCourse>} */
@@ -277,6 +277,44 @@ export function pickAlternateElectives({ count = 1, ...opts } = {}) {
  */
 export function pickAlternateElective(opts = {}) {
   return pickAlternateElectives({ ...opts, count: 1 })[0] ?? null;
+}
+
+/**
+ * Next ranked elective to put in place of one currently on screen.
+ * Uses the same ranking as `pickAlternateElective` (match %, relatedness,
+ * recommended, code). Prefers courses not yet shown; wraps to previously
+ * retired ones when the unused pool is empty.
+ *
+ * @param {{
+ *   displayedCodes?: string[],
+ *   codeToReplace?: string,
+ *   retiredCodes?: string[],
+ *   reflectAnswers?: { interestRatings?: Record<string, number>, styleRatings?: Record<string, number> },
+ * }} [opts]
+ * @returns {{ course: ReturnType<typeof buildElectiveCard>, wrap: boolean } | null}
+ */
+export function pickReplacementElective({
+  displayedCodes = [],
+  codeToReplace,
+  retiredCodes = [],
+  reflectAnswers = {},
+} = {}) {
+  const displayed = displayedCodes.map((code) => normalizeCode(code));
+  const replacing = codeToReplace ? normalizeCode(codeToReplace) : "";
+  const retired = retiredCodes.map((code) => normalizeCode(code));
+
+  const fromUnused = pickAlternateElective({
+    excludeCodes: [...displayed, ...retired],
+    reflectAnswers,
+  });
+  if (fromUnused) return { course: fromUnused, wrap: false };
+
+  const wrapped = pickAlternateElective({
+    excludeCodes: displayed,
+    reflectAnswers,
+  });
+  if (!wrapped || normalizeCode(wrapped.code) === replacing) return null;
+  return { course: wrapped, wrap: true };
 }
 
 /**

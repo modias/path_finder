@@ -9,6 +9,7 @@ import {
   lookupTrackedElectiveCatalog,
   pickAlternateElective,
   pickAlternateElectives,
+  pickReplacementElective,
   LOW_MATCH_REFRESH_PERCENT,
   MAX_DISPLAYED_ELECTIVES,
   PINNED_ELECTIVE_COUNT,
@@ -131,9 +132,8 @@ describe("pickAlternateElective", () => {
 });
 
 describe("pickAlternateElectives", () => {
-  it("pins two electives and swaps two at a time, still showing four", () => {
-    assert.equal(PINNED_ELECTIVE_COUNT, 2);
-    assert.equal(SWAP_ELECTIVE_COUNT, 2);
+  it("still exposes four displayed electives", () => {
+    assert.equal(MAX_DISPLAYED_ELECTIVES, 4);
     assert.equal(PINNED_ELECTIVE_COUNT + SWAP_ELECTIVE_COUNT, MAX_DISPLAYED_ELECTIVES);
   });
 
@@ -153,20 +153,71 @@ describe("pickAlternateElectives", () => {
     }
   });
 
-  it("skips already-shown codes so a refresh can bring in a new bottom pair", () => {
+  it("skips already-shown codes so a refresh can bring in a new course", () => {
     const shown = buildInitialElectiveCodes({ interestRatings: { dataViz: 5, ai: 5 } });
-    const pinned = shown.slice(0, PINNED_ELECTIVE_COUNT);
     const alts = pickAlternateElectives({
       excludeCodes: shown,
       reflectAnswers: { interestRatings: { dataViz: 5, ai: 5 } },
-      count: SWAP_ELECTIVE_COUNT,
+      count: 1,
     });
 
-    assert.equal(alts.length, SWAP_ELECTIVE_COUNT);
-    for (const alt of alts) {
-      assert.ok(!shown.includes(alt.code), `${alt.code} was already on screen`);
-      assert.ok(!pinned.includes(alt.code));
-    }
+    assert.equal(alts.length, 1);
+    assert.ok(!shown.includes(alts[0].code), `${alts[0].code} was already on screen`);
+  });
+});
+
+describe("pickReplacementElective", () => {
+  const answers = { interestRatings: { dataViz: 5, ai: 5 } };
+
+  it("replaces only the requested code with the next ranked unused elective", () => {
+    const shown = buildInitialElectiveCodes(answers);
+    assert.ok(shown.length >= 2);
+
+    const replacing = shown[shown.length - 1];
+    const result = pickReplacementElective({
+      displayedCodes: shown,
+      codeToReplace: replacing,
+      reflectAnswers: answers,
+    });
+
+    assert.ok(result?.course);
+    assert.equal(result.wrap, false);
+    assert.ok(!shown.includes(result.course.code));
+    assert.notEqual(result.course.code, replacing);
+  });
+
+  it("picks the same next course regardless of which card is replaced", () => {
+    const shown = buildInitialElectiveCodes(answers);
+    const first = pickReplacementElective({
+      displayedCodes: shown,
+      codeToReplace: shown[0],
+      reflectAnswers: answers,
+    });
+    const last = pickReplacementElective({
+      displayedCodes: shown,
+      codeToReplace: shown[shown.length - 1],
+      reflectAnswers: answers,
+    });
+
+    assert.ok(first?.course);
+    assert.equal(first.course.code, last.course.code);
+  });
+
+  it("wraps to a retired elective when the unused pool is empty", () => {
+    const pool = listOutsideElectiveCodes();
+    const shown = pool.slice(0, 2);
+    const retired = pool.slice(2);
+    const result = pickReplacementElective({
+      displayedCodes: shown,
+      codeToReplace: shown[0],
+      retiredCodes: retired,
+      reflectAnswers: answers,
+    });
+
+    assert.ok(result?.course);
+    assert.equal(result.wrap, true);
+    assert.ok(retired.includes(result.course.code));
+    assert.ok(!shown.includes(result.course.code));
   });
 });
 

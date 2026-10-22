@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { BarChart3, BookOpen, Database, Globe, LineChart, Lightbulb, Sparkles } from "lucide-react";
+import { BarChart3, Database, Globe, LineChart, Lightbulb, Sparkles } from "lucide-react";
 import { COURSES, CORE_REQUIREMENT_GROUPS, ELECTIVE_PATHWAYS } from "../data/courseCatalog";
 import CourseAdvisor from "./CourseAdvisor";
 
@@ -37,7 +36,6 @@ function SectionHeading({ children }) {
 
 /**
  * @param {{
- *   registerPath?: string,
  *   recommendations?: import("./CourseAdvisor").Recommendation[],
  *   recommendLoading?: boolean,
  *   recommendError?: string | null,
@@ -46,7 +44,6 @@ function SectionHeading({ children }) {
  * }} props
  */
 export default function CoreRequirementsOverview({
-  registerPath = "/register-courses",
   recommendations = [],
   recommendLoading = false,
   recommendError = null,
@@ -190,23 +187,13 @@ export default function CoreRequirementsOverview({
           </div>
           <ul className="divide-y divide-[#E4E1D4]">
             {pathwayCourses.map((course) => (
-              <li key={`${course.subject}-${course.number}`} className="px-5 py-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold" style={{ color: INK }}>
-                    <span style={{ fontFamily: "ui-monospace, monospace" }}>{course.subject} {course.number}</span>
-                    {" · "}
-                    {course.title}
-                  </p>
-                  {course.blurb && <p className="text-xs mt-0.5" style={{ color: MUTED }}>{course.blurb}</p>}
-                </div>
-                <Link
-                  to={`${registerPath}?subject=${course.subject}&number=${course.number}`}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-full shrink-0"
-                  style={{ background: "#EEF0EA", color: INK, border: "1px solid #C8C5B8" }}
-                >
-                  <BookOpen size={13} />
-                  Find sections
-                </Link>
+              <li key={`${course.subject}-${course.number}`} className="px-5 py-3">
+                <p className="text-sm font-semibold" style={{ color: INK }}>
+                  <span style={{ fontFamily: "ui-monospace, monospace" }}>{course.subject} {course.number}</span>
+                  {" · "}
+                  {course.title}
+                </p>
+                {course.blurb && <p className="text-xs mt-0.5" style={{ color: MUTED }}>{course.blurb}</p>}
               </li>
             ))}
           </ul>

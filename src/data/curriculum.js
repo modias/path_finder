@@ -108,7 +108,7 @@ export const REFLECT_CREDIT_LOAD_OPTIONS = [
   "18 (heavy)",
 ];
 
-/** Past terms with grades — shown under Registration → Your schedule */
+/** Past terms with grades — the mock transcript used for eligibility. */
 export const COURSE_HISTORY = [
   {
     term: "Spring 2026",
