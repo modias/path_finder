@@ -7,23 +7,16 @@ import {
   scoreCourseForReflectDetail,
   relatednessToReflectAnswers,
   GOOD_OPTION_MIN,
-  GOOD_OPTION_PERCENT,
 } from "./reflectScoring.js";
 import { buildStudentRecord } from "./studentRecord.js";
 
 export const ELECTIVE_RECOMMEND_THRESHOLD = GOOD_OPTION_MIN;
 
-/** Match % below this (Weak match) shows a "Show another" refresh control. */
-export const LOW_MATCH_REFRESH_PERCENT = GOOD_OPTION_PERCENT;
+/** Refreshing a card only swaps in electives at or above this match %. */
+export const MIN_REPLACEMENT_MATCH_PERCENT = 30;
 
 /** Max elective cards shown in ElectivesPanel. */
 export const MAX_DISPLAYED_ELECTIVES = 4;
-
-/** Historical pin count; the panel now refreshes one clicked card at a time. */
-export const PINNED_ELECTIVE_COUNT = 2;
-
-/** Historical pair-swap size. Single-card refresh uses `pickReplacementElective`. */
-export const SWAP_ELECTIVE_COUNT = 2;
 
 /** @type {Map<string, import("../data/courseCatalog.js").CatalogCourse>} */
 const catalogByCode = new Map(
@@ -57,18 +50,16 @@ export function getElectiveStatus(code, record) {
  * @param {{
  *   interestRatings?: Record<string, number>,
  *   styleRatings?: Record<string, number>,
- *   industries?: string[],
  *   topicsEnjoyed?: string[],
  *   skillsHave?: string[],
  *   skillsWant?: string[],
- *   deliverables?: string[],
  * }} [reflectAnswers]
  * @returns {boolean}
  */
 export function hasReflectAnswers(reflectAnswers = {}) {
   const ratings = [reflectAnswers.interestRatings, reflectAnswers.styleRatings];
   if (ratings.some((map) => map && Object.values(map).some((value) => value != null))) return true;
-  return ["industries", "topicsEnjoyed", "skillsHave", "skillsWant", "deliverables"].some(
+  return ["topicsEnjoyed", "skillsHave", "skillsWant"].some(
     (key) => Array.isArray(reflectAnswers[key]) && reflectAnswers[key].length > 0
   );
 }
@@ -170,6 +161,7 @@ function buildElectiveCard(code, reflectAnswers, opts = {}) {
     matchPercent: detail.matchPercent,
     matchLabel: detail.label,
     personalized: detail.drivers.length > 0,
+    drivers: detail.drivers,
   };
 }
 
@@ -303,16 +295,15 @@ export function pickReplacementElective({
   const replacing = codeToReplace ? normalizeCode(codeToReplace) : "";
   const retired = retiredCodes.map((code) => normalizeCode(code));
 
-  const fromUnused = pickAlternateElective({
-    excludeCodes: [...displayed, ...retired],
-    reflectAnswers,
-  });
+  const firstAboveCutoff = (excludeCodes) =>
+    rankOutsideElectives({ excludeCodes, reflectAnswers }).find(
+      (course) => (course.matchPercent ?? 0) >= MIN_REPLACEMENT_MATCH_PERCENT
+    ) ?? null;
+
+  const fromUnused = firstAboveCutoff([...displayed, ...retired]);
   if (fromUnused) return { course: fromUnused, wrap: false };
 
-  const wrapped = pickAlternateElective({
-    excludeCodes: displayed,
-    reflectAnswers,
-  });
+  const wrapped = firstAboveCutoff(displayed);
   if (!wrapped || normalizeCode(wrapped.code) === replacing) return null;
   return { course: wrapped, wrap: true };
 }

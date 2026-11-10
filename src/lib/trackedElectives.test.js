@@ -10,10 +10,7 @@ import {
   pickAlternateElective,
   pickAlternateElectives,
   pickReplacementElective,
-  LOW_MATCH_REFRESH_PERCENT,
   MAX_DISPLAYED_ELECTIVES,
-  PINNED_ELECTIVE_COUNT,
-  SWAP_ELECTIVE_COUNT,
 } from "./trackedElectives.js";
 import { TRACKED_ELECTIVE_CODES } from "../data/curriculum.js";
 import { COURSES } from "../data/courseCatalog.js";
@@ -79,11 +76,6 @@ describe("buildTrackedElectives", () => {
 });
 
 describe("pickAlternateElective", () => {
-  it("exposes a low-match refresh threshold at the Weak match band (50%)", () => {
-    assert.equal(LOW_MATCH_REFRESH_PERCENT, GOOD_OPTION_PERCENT);
-    assert.equal(LOW_MATCH_REFRESH_PERCENT, 50);
-  });
-
   it("lists outside electives beyond the tracked set", () => {
     const pool = listOutsideElectiveCodes();
     assert.ok(pool.length > TRACKED_ELECTIVE_CODES.length);
@@ -134,7 +126,6 @@ describe("pickAlternateElective", () => {
 describe("pickAlternateElectives", () => {
   it("still exposes four displayed electives", () => {
     assert.equal(MAX_DISPLAYED_ELECTIVES, 4);
-    assert.equal(PINNED_ELECTIVE_COUNT + SWAP_ELECTIVE_COUNT, MAX_DISPLAYED_ELECTIVES);
   });
 
   it("returns two distinct non-excluded electives", () => {
@@ -142,10 +133,10 @@ describe("pickAlternateElectives", () => {
     const alts = pickAlternateElectives({
       excludeCodes: exclude,
       reflectAnswers: { interestRatings: { dataViz: 5 } },
-      count: SWAP_ELECTIVE_COUNT,
+      count: 2,
     });
 
-    assert.equal(alts.length, SWAP_ELECTIVE_COUNT);
+    assert.equal(alts.length, 2);
     assert.notEqual(alts[0].code, alts[1].code);
     for (const alt of alts) {
       assert.ok(!exclude.includes(alt.code));

@@ -1,9 +1,9 @@
 import { useState, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
-  Sparkles, ArrowRight, ArrowLeft, Check, X,
-  BarChart3, Database, Cpu, LineChart, ShieldCheck, Users, Star, ChevronDown,
-  Home, Heart, Compass, BrainCircuit,
+  Sparkles, ArrowRight, ArrowLeft, X,
+  BarChart3, Database, Cpu, LineChart, ShieldCheck, Users, ChevronDown,
+  Heart, Compass, BrainCircuit, CircleUserRound,
 } from "lucide-react";
 import RatingRow from "./components/RatingRow";
 import {
@@ -11,7 +11,6 @@ import {
   STYLE_QUESTIONS,
   TOPIC_OPTIONS,
   SKILL_OPTIONS,
-  DELIVERABLE_OPTIONS,
 } from "./data/reflectQuestions";
 import { apiFetch } from "./lib/api";
 import { friendlyApiError, parseJsonResponse } from "./lib/apiResponse";
@@ -30,6 +29,7 @@ import {
   CAREERS as CAREER_DATA,
   REFLECT_TERM_OPTIONS,
   REFLECT_CREDIT_LOAD_OPTIONS,
+  STEP_LABELS,
 } from "./data/curriculum";
 
 const PAGE_BG = "#FFFFFF";
@@ -39,8 +39,8 @@ const GOLD_DEEP = "#8C7F4B";
 const GREEN = "#1F7A54";
 const SURFACE = "#FFFFFF";
 const MUTED = "#5B6660";
-const ON_DARK_MUTED = "#BFD9CB";
-
+const NAV_GREEN = "#0F3B28";
+const HERO_CREAM = "#FBF6EA";
 const DEFAULT_REGISTER_TERM = REFLECT_TERM_OPTIONS[0] || "";
 const DEFAULT_CREDIT_LOAD = REFLECT_CREDIT_LOAD_OPTIONS[1] || "";
 
@@ -64,27 +64,94 @@ const STUDENT_RECORD = buildStudentRecord();
 const TAKEN_CODES = [...STUDENT_RECORD.completed, ...STUDENT_RECORD.inProgress];
 const COURSE_TITLES = courseHistoryTitles();
 
-function Stepper({ step, setStep }) {
-  const steps = ["Reflect", "Your plan", "Explore courses", "Meet the careers"];
+function TopNav({ step, setStep }) {
+  const linkClass = "relative py-1 text-sm transition-opacity hover:opacity-100";
+  const navItems = STEP_LABELS.map((label, i) => ({
+    label,
+    active: step === i,
+    onClick: () => setStep(i),
+  }));
+
   return (
-    <div className="flex items-center gap-3 mb-10">
-      {steps.map((label, i) => (
-        <button key={label} onClick={() => setStep(i)} className="flex items-center gap-2" style={{ opacity: i <= step ? 1 : 0.5 }}>
-          <span
-            className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold shrink-0"
-            style={{
-              background: i < step ? GOLD : i === step ? GREEN : "transparent",
-              color: i < step ? INK : i === step ? "#FFFFFF" : MUTED,
-              border: `1.5px solid ${i < step ? GOLD : i === step ? GREEN : "#DCDACD"}`,
-            }}
-          >
-            {i < step ? <Check size={14} /> : i + 1}
-          </span>
-          <span className="text-sm hidden sm:inline" style={{ color: i <= step ? INK : MUTED }}>{label}</span>
-          {i < steps.length - 1 && <span className="w-6 sm:w-10 h-px mx-1" style={{ background: "#DCDACD" }} />}
-        </button>
-      ))}
-    </div>
+    <header className="relative z-20" style={{ background: NAV_GREEN }}>
+      <div className="mx-auto max-w-7xl px-6 h-16 grid grid-cols-[1fr_auto_1fr] items-center">
+        <Link to="/" className="flex items-center hover:opacity-90 transition-opacity" aria-label="Home">
+          <img
+            src="/unc-charlotte-logo.png?v=7"
+            alt="University of North Carolina Charlotte"
+            className="h-9 w-auto object-contain"
+            style={{ filter: "brightness(0) invert(1)" }}
+          />
+        </Link>
+        <nav className="flex items-center gap-4 sm:gap-8" aria-label="Main">
+          {navItems.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={item.onClick}
+              aria-current={item.active ? "page" : undefined}
+              className={linkClass}
+              style={{ color: "#FFFFFF", opacity: item.active ? 1 : 0.85 }}
+            >
+              {item.label}
+              {item.active && (
+                <span
+                  className="absolute left-[-6px] right-[-6px] -bottom-1.5 h-0.5 rounded-full"
+                  style={{ background: "#E9E2C8" }}
+                  aria-hidden="true"
+                />
+              )}
+            </button>
+          ))}
+        </nav>
+        <div className="flex justify-end">
+          <button type="button" aria-label="Profile" className="hover:opacity-90 transition-opacity">
+            <CircleUserRound size={30} strokeWidth={1.5} color="#FFFFFF" />
+          </button>
+        </div>
+      </div>
+      <svg
+        className="absolute left-0 top-full w-full h-8 pointer-events-none"
+        viewBox="0 0 1440 32"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <path d="M0 0 H1440 V2 C 1000 2 420 6 0 30 Z" fill={NAV_GREEN} />
+        <path d="M0 30 C 420 6 1000 2 1440 2" fill="none" stroke={GOLD} strokeOpacity="0.55" strokeWidth="2" />
+      </svg>
+    </header>
+  );
+}
+
+function ReflectHero() {
+  return (
+    <section className="relative overflow-hidden" style={{ background: `linear-gradient(90deg, ${HERO_CREAM} 45%, #F3F1EA)` }}>
+      <img
+        src="/campus-hero.jpg"
+        alt=""
+        aria-hidden="true"
+        className="absolute right-0 top-0 h-full w-[60%] sm:w-[45%] object-cover object-right pointer-events-none"
+        style={{
+          maskImage: "linear-gradient(to right, transparent, #000 45%), linear-gradient(to top, transparent, #000 35%)",
+          maskComposite: "intersect",
+          WebkitMaskImage: "linear-gradient(to right, transparent, #000 45%), linear-gradient(to top, transparent, #000 35%)",
+          WebkitMaskComposite: "source-in",
+        }}
+      />
+      <div className="relative mx-auto max-w-7xl px-6 pt-16 pb-10 sm:pt-20 sm:pb-12">
+        <h1
+          className="text-4xl sm:text-5xl lg:text-6xl mb-4 leading-[1.08] font-semibold"
+          style={{ fontFamily: "Georgia, serif", color: INK }}
+        >
+          Before the data,
+          <br />
+          <em className="font-semibold" style={{ color: "#A8893F" }}>a little about you.</em>
+        </h1>
+        <p className="text-base max-w-xl" style={{ color: "#2F3A34" }}>
+          Rate each area honestly — there&apos;s no wrong answer. Your ratings shape which electives we highlight and recommend, not which ones you&apos;re allowed to take.
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -101,13 +168,13 @@ function MultiSelectDropdown({
 
   return (
     <div className="mb-5 last:mb-0">
-      <p className="text-sm font-medium mb-2" style={{ color: "#FFFFFF" }}>
+      <p className="text-sm font-semibold mb-2" style={{ color: INK }}>
         {prompt}
       </p>
       <div
         className="glass-chip relative w-full max-w-xl rounded-[22px]"
         style={{
-          border: `1.5px solid ${hasValue || open ? GOLD : "rgba(255,255,255,0.28)"}`,
+          border: `1.5px solid ${hasValue || open ? GOLD : "rgba(11,46,34,0.55)"}`,
         }}
       >
         <button
@@ -124,7 +191,7 @@ function MultiSelectDropdown({
               <span
                 key={option.key}
                 className="inline-flex items-center gap-1 text-sm pl-3 pr-1 py-1 rounded-full pointer-events-auto"
-                style={{ background: GOLD, color: INK }}
+                style={{ background: GOLD, color: "#FFFFFF" }}
               >
                 {option.label}
                 <button
@@ -138,14 +205,14 @@ function MultiSelectDropdown({
               </span>
             ))
           ) : (
-            <span className="pl-1.5 text-sm" style={{ color: ON_DARK_MUTED }}>
+            <span className="pl-1.5 text-sm" style={{ color: MUTED }}>
               {placeholder}
             </span>
           )}
         </div>
         <ChevronDown
           size={16}
-          color={hasValue || open ? GOLD : "#FFFFFF"}
+          color={hasValue || open ? GOLD : INK}
           className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 transition-transform duration-200"
           style={{ transform: open ? "translateY(-50%) rotate(180deg)" : "translateY(-50%)" }}
           aria-hidden="true"
@@ -165,8 +232,8 @@ function MultiSelectDropdown({
                 className={`inline-flex items-center gap-1.5 text-sm pl-3 py-1.5 rounded-full ${isSelected ? "" : "glass-chip"}`}
                 style={{
                   background: isSelected ? GOLD : undefined,
-                  color: isSelected ? INK : "#FFFFFF",
-                  border: `1.5px solid ${isSelected ? GOLD : "rgba(255,255,255,0.28)"}`,
+                  color: isSelected ? "#FFFFFF" : INK,
+                  border: `1.5px solid ${isSelected ? GOLD : "rgba(11,46,34,0.55)"}`,
                   paddingRight: isSelected ? "0.5rem" : "0.75rem",
                 }}
               >
@@ -192,8 +259,6 @@ function ReflectStep({
   toggleSkillHave,
   skillsWant,
   toggleSkillWant,
-  deliverables,
-  toggleDeliverable,
   note,
   setNote,
   onGetRecommendations,
@@ -204,20 +269,13 @@ function ReflectStep({
 }) {
   return (
     <div>
-      <p className="text-xs tracking-widest uppercase mb-2" style={{ color: GOLD, fontFamily: "ui-monospace, monospace" }}>Step one</p>
-      <h1 className="text-4xl sm:text-5xl mb-3 leading-tight" style={{ fontFamily: "Georgia, serif", color: INK }}>
-        Before the data,<br />a little about you.
-      </h1>
-      <p className="text-base mb-10 max-w-xl" style={{ color: MUTED }}>
-        Rate each area honestly — there&apos;s no wrong answer. Your ratings shape which electives we highlight and recommend, not which ones you&apos;re allowed to take.
-      </p>
-
       <div className="glass-panel rounded-2xl p-6 mb-8">
-        <div className="flex items-center gap-2 mb-5">
-          <Heart size={18} color={GOLD} />
-          <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
+        <div className="flex items-center gap-2.5 mb-6">
+          <Heart size={18} color={GOLD_DEEP} className="shrink-0" />
+          <h3 className="text-sm font-bold uppercase tracking-wide shrink-0" style={{ color: INK }}>
             Section A — Interest by specialty area
           </h3>
+          <span className="flex-1 h-px" style={{ background: `${GOLD}99` }} aria-hidden="true" />
         </div>
         {INTEREST_QUESTIONS.map((question) => (
           <RatingRow
@@ -232,11 +290,12 @@ function ReflectStep({
       </div>
 
       <div className="glass-panel rounded-2xl p-6 mb-8">
-        <div className="flex items-center gap-2 mb-5">
-          <Compass size={18} color={GOLD} />
-          <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
+        <div className="flex items-center gap-2.5 mb-6">
+          <Compass size={18} color={GOLD_DEEP} className="shrink-0" />
+          <h3 className="text-sm font-bold uppercase tracking-wide shrink-0" style={{ color: INK }}>
             Section B — Work style &amp; comfort
           </h3>
+          <span className="flex-1 h-px" style={{ background: `${GOLD}99` }} aria-hidden="true" />
         </div>
         {STYLE_QUESTIONS.map((question) => (
           <RatingRow
@@ -253,11 +312,12 @@ function ReflectStep({
       </div>
 
       <div className="glass-panel rounded-2xl p-6 mb-8">
-        <div className="flex items-center gap-2 mb-5">
-          <BarChart3 size={18} color={GOLD} />
-          <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
-            Section C — Topics, skills &amp; outcomes
+        <div className="flex items-center gap-2.5 mb-6">
+          <BarChart3 size={18} color={GOLD_DEEP} className="shrink-0" />
+          <h3 className="text-sm font-bold uppercase tracking-wide shrink-0" style={{ color: INK }}>
+            Section C — Topics &amp; skills
           </h3>
+          <span className="flex-1 h-px" style={{ background: `${GOLD}99` }} aria-hidden="true" />
         </div>
         <MultiSelectDropdown
           prompt="Which topics do you actually enjoy?"
@@ -276,12 +336,6 @@ function ReflectStep({
           options={SKILL_OPTIONS}
           selected={skillsWant}
           onToggle={toggleSkillWant}
-        />
-        <MultiSelectDropdown
-          prompt="What do you want to be able to show an employer?"
-          options={DELIVERABLE_OPTIONS}
-          selected={deliverables}
-          onToggle={toggleDeliverable}
         />
       </div>
 
@@ -324,6 +378,7 @@ function ReflectStep({
 }
 
 function ExploreStep({
+  reflectAnswers,
   recommendations,
   recommendLoading,
   recommendError,
@@ -343,6 +398,7 @@ function ExploreStep({
       </p>
 
       <CoreRequirementsOverview
+        reflectAnswers={reflectAnswers}
         recommendations={recommendations}
         recommendLoading={recommendLoading}
         recommendError={recommendError}
@@ -527,14 +583,12 @@ function CareersStep({ flipped, toggleFlip, recommendations, reflectAnswers }) {
 }
 
 export default function App() {
-  const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [interestRatings, setInterestRatings] = useState({});
   const [styleRatings, setStyleRatings] = useState({});
   const [topicsEnjoyed, setTopicsEnjoyed] = useState([]);
   const [skillsHave, setSkillsHave] = useState([]);
   const [skillsWant, setSkillsWant] = useState([]);
-  const [deliverables, setDeliverables] = useState([]);
   const registerTerm = DEFAULT_REGISTER_TERM;
   const creditLoad = DEFAULT_CREDIT_LOAD;
   const [note, setNote] = useState("");
@@ -553,8 +607,7 @@ export default function App() {
     creditLoad,
     note,
     careerTarget,
-    [],
-    { topicsEnjoyed, skillsHave, skillsWant, deliverables }
+    { topicsEnjoyed, skillsHave, skillsWant }
   );
 
   const setInterestRating = (key, rating) => {
@@ -575,8 +628,6 @@ export default function App() {
   const toggleTopic = toggleInList(setTopicsEnjoyed);
   const toggleSkillHave = toggleInList(setSkillsHave);
   const toggleSkillWant = toggleInList(setSkillsWant);
-  const toggleDeliverable = toggleInList(setDeliverables);
-
   const toggleFlip = (i) => {
     setFlipped((prev) => {
       const next = new Set(prev);
@@ -634,17 +685,14 @@ export default function App() {
           .flip-card:hover .flip-inner { transform: rotateY(180deg); }
         }
         .glass-panel {
-          background: linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(11,46,34,0.78) 14%, rgba(8,36,26,0.82) 100%);
-          backdrop-filter: blur(32px) saturate(180%);
-          -webkit-backdrop-filter: blur(32px) saturate(180%);
-          border: 1px solid rgba(255,255,255,0.28);
-          box-shadow: 0 20px 60px rgba(11,46,34,0.16), inset 0 1px 0 rgba(255,255,255,0.38), inset 0 -1px 0 rgba(0,0,0,0.18);
+          background: rgba(251,248,241,0.94);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+          border: 1px solid #E8E2CF;
+          box-shadow: 0 12px 40px rgba(11,46,34,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
         }
         .glass-chip {
-          background: rgba(255,255,255,0.08);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+          background: #FFFFFF;
         }
       `}</style>
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
@@ -653,35 +701,10 @@ export default function App() {
         <div className="absolute bottom-[-8%] right-[18%] w-[380px] h-[380px] rounded-full" style={{ background: "rgba(11,46,34,0.16)", filter: "blur(80px)" }} />
       </div>
 
-      <div className={`relative z-10 mx-auto px-6 py-14 ${step === 0 || step === 1 || step === 2 ? "max-w-7xl" : "max-w-5xl"}`}>
-        <div className="flex items-center justify-between gap-4 mb-8">
-          <Link to="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
-            <img
-              src="/unc-charlotte-logo.png?v=7"
-              alt="University of North Carolina Charlotte"
-              className="h-12 sm:h-14 w-auto object-contain"
-            />
-            <span className="text-xs tracking-widest uppercase" style={{ color: MUTED, fontFamily: "ui-monospace, monospace" }}>
-              School of Data Science
-            </span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className="flex items-center gap-2 text-sm hover:opacity-90 transition-opacity"
-              style={{ color: INK }}
-            >
-              <ArrowLeft size={16} /> Back
-            </button>
-            <Link to="/" className="flex items-center gap-2 text-sm" style={{ color: INK }}>
-              <Home size={16} /> Home
-            </Link>
-          </div>
-        </div>
+      <TopNav step={step} setStep={setStep} />
+      {step === 0 && <ReflectHero />}
 
-        <Stepper step={step} setStep={setStep} />
-
+      <div className={`relative z-10 mx-auto px-6 ${step === 0 ? "pt-10 pb-14" : "pt-16 pb-14"} ${step === 0 || step === 1 || step === 2 ? "max-w-7xl" : "max-w-5xl"}`}>
         {step === 0 && (
           <ReflectStep
             interestRatings={interestRatings}
@@ -694,8 +717,6 @@ export default function App() {
             toggleSkillHave={toggleSkillHave}
             skillsWant={skillsWant}
             toggleSkillWant={toggleSkillWant}
-            deliverables={deliverables}
-            toggleDeliverable={toggleDeliverable}
             note={note}
             setNote={setNote}
             onGetRecommendations={fetchRecommendations}
@@ -714,6 +735,7 @@ export default function App() {
         )}
         {step === 2 && (
           <ExploreStep
+            reflectAnswers={reflectAnswers}
             recommendations={recommendations}
             recommendLoading={recommendLoading}
             recommendError={recommendError}

@@ -2,15 +2,11 @@ import { SchemaType } from "@google/generative-ai";
 import { COURSES } from "../src/data/courseCatalog.js";
 import { enrichCourseForTopicMatching } from "../src/data/cciTopicPool.js";
 import { buildStudentRecord } from "../src/lib/studentRecord.js";
-import {
-  getEligibleCourses,
-  filterToEligibleCodes,
-} from "../src/lib/eligibility.js";
+import { getEligibleCourses } from "../src/lib/eligibility.js";
 import { normalizeCode } from "../src/data/prerequisites.js";
 import {
   describeCourseMatch,
   filterByMatchConfidence,
-  formatReflectAnswersForPrompt,
   GOOD_OPTION_MIN,
   matchPercentFromScore,
   pickCoursesBySpecializePreference,
@@ -72,25 +68,6 @@ function withTimeout(promise, ms) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-const RECOMMENDATION_RESPONSE_SCHEMA = {
-  type: SchemaType.OBJECT,
-  properties: {
-    summary: { type: SchemaType.STRING },
-    courses: {
-      type: SchemaType.ARRAY,
-      items: {
-        type: SchemaType.OBJECT,
-        properties: {
-          code: { type: SchemaType.STRING },
-          reason: { type: SchemaType.STRING },
-        },
-        required: ["code", "reason"],
-      },
-    },
-  },
-  required: ["summary", "courses"],
-};
-
 const EXPLANATION_RESPONSE_SCHEMA = {
   type: SchemaType.OBJECT,
   properties: {
@@ -108,14 +85,6 @@ const EXPLANATION_RESPONSE_SCHEMA = {
   },
   required: ["courses"],
 };
-
-/**
- * @param {Record<string, unknown>} answers
- * @returns {string}
- */
-export function formatAnswersForPrompt(answers = {}) {
-  return formatReflectAnswersForPrompt(answers);
-}
 
 /**
  * @param {unknown} creditLoad
@@ -318,42 +287,7 @@ export function buildAdvisorCourseContext(answers = {}) {
 }
 
 /**
- * Builds the system instruction / prompt text for Gemini.
- * The course list is always the filtered eligible set — never the full catalog.
- *
- * @param {{ eligible: Array<{ subject: string, number: string|number, title: string, credits: number, category?: string, blurb?: string }>, answers?: Record<string, unknown> }} params
- * @returns {string}
- */
-export function buildRecommendPrompt({ eligible, answers = {} }) {
-  const shortlist = shortlistEligibleCourses(eligible, answers);
-  const eligibleSummaries = toEligibleSummaries(shortlist, answers);
-  const creditHours = parseCreditLoadHours(answers.creditLoad);
-  const creditLine = creditHours
-    ? `Aim for about ${creditHours.target} total credits (stay between ${creditHours.min} and ${creditHours.max} if possible; do not exceed ${creditHours.max} by more than one course).`
-    : "Keep the total credits of your recommendations close to the student's stated credit load, without exceeding it by more than one course.";
-
-  return `You are a course recommendation assistant for UNC Charlotte's B.S. Data Science program. You will be given a shortlist of courses the student is CURRENTLY ELIGIBLE to register for — this list has already been filtered for prerequisites and corequisites and ranked by matchScore (0–100% match, computed in code). Treat it as the complete and only set of valid choices. Each course includes matchLabel ("Strong match" ≥75% or "Good option" ≥50%), scoreDrivers (the specific Reflect answers that drove the score, ending in the percent match), department/topic blurbs, and matchedSpecialties when a rating is 4/5 or 5/5.
-
-Recommend 3-5 courses from ELIGIBLE_COURSES that best fit the student, in priority order. Prefer higher matchScore / "Strong match" courses first. Prefer "Good option" over weaker entries. Prefer remaining core / computing / capstone courses over gen-ed when matchScore is similar. ${creditLine}
-
-Rules:
-- Only recommend courses from the ELIGIBLE_COURSES list below. Do not invent, abbreviate, or guess a course code that isn't in that list.
-- Never recommend required studio sequence or listed support courses that were removed from this shortlist (for example DTSC 1301–4302, ITSC 1213/2175/2214, ITCS 3160/3162, STAT 1222/2223/3160, MATH 1120/1241/1165/2164).
-- If fewer than 3 eligible courses are available, recommend as many as exist and say so in "summary" rather than padding with invalid codes.
-- Do not pad the list with unmatched gen-ed courses when stronger specialty matches are on the shortlist.
-- In each course "reason", cite the actual driving answer from scoreDrivers (or matchedSpecialties). Do not invent drivers and do not write generic "you're eligible" reasons.
-- Respond with JSON only — no markdown formatting, no prose outside the JSON object, matching exactly this shape:
-{"summary":"one or two sentences of overall guidance","courses":[{"code":"SUBJ 1234","reason":"one sentence tailored to this student"}]}
-
-ELIGIBLE_COURSES (ranked, best match first):
-${JSON.stringify(eligibleSummaries, null, 2)}
-
-STUDENT_ANSWERS:
-${formatAnswersForPrompt(answers)}`;
-}
-
-/**
- * Deterministic fallback when the model response can't be parsed (or yields nothing usable).
+ * Deterministic ranking of eligible courses from Reflect answers.
  * @param {Array<{ subject: string, number: string|number, title: string, credits: number, category?: string }>} eligible
  * @param {string} [summary]
  * @returns {{ summary: string, recommendations: Array<{ code: string, title: string, credits: number, category?: string, reason: string }>, eligibleCount: number }}
@@ -421,88 +355,6 @@ export function packRecommendationsToLoad(recommendations, answers = {}) {
     total += credits;
   }
   return packed.length ? packed : recommendations.slice(0, minKeep);
-}
-
-/**
- * Parse model text, filter to eligible codes, and assemble the API payload.
- * On JSON parse failure, returns a deterministic fallback from eligible — never throws.
- *
- * @param {string} text
- * @param {Array<{ subject: string, number: string|number, title: string, credits: number, category?: string, blurb?: string }>} eligible
- * @returns {{ summary: string, recommendations: Array<{ code: string, title: string, credits: number, category?: string, reason: string }>, eligibleCount: number }}
- */
-export function finalizeRecommendationsFromText(text, eligible, answers = {}) {
-  const eligibleSummaries = toEligibleSummaries(eligible, answers);
-  const eligibleByCode = new Map(eligibleSummaries.map((c) => [c.code, c]));
-
-  let parsed;
-  try {
-    const jsonText = String(text || "")
-      .replace(/^```json\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-    parsed = JSON.parse(jsonText);
-  } catch {
-    return buildFallbackRecommendations(eligible, undefined, answers);
-  }
-
-  const rawCodes = (parsed.courses || []).map((c) => c.code).filter(Boolean);
-  const filteredCodes = filterToEligibleCodes(rawCodes, eligible).filter(
-    (code) => !isBlockedFromRecommendation(code)
-  );
-
-  const recommendations = filteredCodes.map((code) => {
-    const catalog = eligibleByCode.get(code);
-    const fromModel = (parsed.courses || []).find(
-      (c) => normalizeCode(c.code) === code
-    );
-    const detail = scoreCourseForReflectDetail(code, answers);
-    return {
-      code,
-      title: catalog?.title || code,
-      credits: catalog?.credits || 3,
-      category: catalog?.category,
-      matchPercent: matchPercentFromScore(detail.score),
-      matchLabel: detail.label,
-      score: detail.score,
-      clusters: detail.clusters,
-      reason: fromModel?.reason || "Matches your interests and remaining degree requirements.",
-    };
-  });
-
-  recommendations.sort((a, b) => (b.score || 0) - (a.score || 0));
-  let diversified = pickCoursesBySpecializePreference(recommendations, answers, 5).map(
-    ({ score, clusters, ...rest }) => rest
-  );
-
-  // Model often returns 1–2 codes; pad from deterministic ranking so the UI
-  // still shows at least MIN_RECOMMENDATIONS when eligibility allows.
-  const minCount = Math.min(MIN_RECOMMENDATIONS, shortlistEligibleCourses(eligible, answers).length);
-  if (diversified.length < minCount) {
-    const fallback = buildFallbackRecommendations(eligible, undefined, answers);
-    const seen = new Set(diversified.map((rec) => normalizeCode(rec.code)));
-    for (const rec of fallback.recommendations) {
-      if (diversified.length >= minCount) break;
-      const code = normalizeCode(rec.code);
-      if (seen.has(code)) continue;
-      seen.add(code);
-      diversified.push(rec);
-    }
-  }
-
-  let summary =
-    parsed.summary || "Here are eligible courses that fit your preferences.";
-  if (diversified.length === 0) {
-    summary =
-      parsed.summary?.trim() ||
-      "No personalized course matches came back from the eligible list for this term. Try adjusting your interests or credit load, or browse the catalog for eligible options.";
-  }
-
-  return {
-    summary,
-    recommendations: packRecommendationsToLoad(diversified, answers),
-    eligibleCount: eligible.length,
-  };
 }
 
 /**

@@ -2,13 +2,10 @@ import { normalizeCode } from "../data/prerequisites.js";
 import {
   INTEREST_QUESTIONS,
   STYLE_QUESTIONS,
-  INDUSTRY_OPTIONS,
   TOPIC_OPTIONS,
   SKILL_OPTIONS,
-  DELIVERABLE_OPTIONS,
   INTEREST_ELECTIVE_CLUSTERS,
   SKILL_COURSE_TAGS,
-  DELIVERABLE_COURSE_TAGS,
   MATH_HEAVY_ELECTIVES,
   RESEARCH_ELECTIVES,
   STUDIO_HANDS_ON_ELECTIVES,
@@ -55,11 +52,9 @@ export const STRONG_MATCH_PERCENT = 75;
 export const GOOD_OPTION_PERCENT = 50;
 export const NEUTRAL_BASE_SCORE = 3;
 export const SCORE_NEAR_TIE = 0.3;
-export const INDUSTRY_BONUS = 0.3;
 export const TOPIC_BONUS = 0.4;
 export const SKILL_WANT_BONUS = 0.35;
 export const SKILL_HAVE_INTRO_NUDGE = -0.25;
-export const DELIVERABLE_BONUS = 0.35;
 
 /**
  * @param {string} code
@@ -199,31 +194,6 @@ export function matchPercentFromScore(score) {
 }
 
 /**
- * Whether a course aligns with any of the student's industry picks.
- * @param {string} code
- * @param {string[]} industryKeys
- * @returns {{ matched: boolean, labels: string[] }}
- */
-export function industryMatchForCourse(code, industryKeys = []) {
-  if (!industryKeys.length) return { matched: false, labels: [] };
-  const keys = interestKeysForCourse(code);
-  const normalized = normalizeCode(code);
-  const labels = [];
-
-  for (const industryKey of industryKeys) {
-    const option = INDUSTRY_OPTIONS.find((item) => item.key === industryKey);
-    if (!option) continue;
-    const clusterHit = option.clusters?.some((cluster) => keys.includes(cluster));
-    const prefixHit = option.prefixes?.some((prefix) =>
-      normalized.startsWith(`${prefix} `)
-    );
-    if (clusterHit || prefixHit) labels.push(option.label);
-  }
-
-  return { matched: labels.length > 0, labels };
-}
-
-/**
  * Q19 — topics enjoyed that map onto this course's specialty clusters.
  * @param {string} code
  * @param {string[]} topicKeys
@@ -261,35 +231,14 @@ function skillTagForCourse(code, skillKey) {
 }
 
 /**
- * @param {string} code
- * @param {string[]} deliverableKeys
- * @returns {{ matched: boolean, labels: string[] }}
- */
-export function deliverableMatchForCourse(code, deliverableKeys = []) {
-  if (!deliverableKeys.length) return { matched: false, labels: [] };
-  const labels = [];
-  for (const key of deliverableKeys) {
-    const courses = DELIVERABLE_COURSE_TAGS[key];
-    if (!courses?.length) continue;
-    if (codeInList(code, courses)) {
-      const label = DELIVERABLE_OPTIONS.find((opt) => opt.key === key)?.label || key;
-      labels.push(label);
-    }
-  }
-  return { matched: labels.length > 0, labels };
-}
-
-/**
- * Full reflect score breakdown (Rules 1–9 + Q19–Q22).
+ * Full reflect score breakdown (Rules 1–9 + Q19–Q21).
  * @param {string} code
  * @param {{
  *   interestRatings?: Record<string, number>,
  *   styleRatings?: Record<string, number>,
- *   industries?: string[],
  *   topicsEnjoyed?: string[],
  *   skillsHave?: string[],
  *   skillsWant?: string[],
- *   deliverables?: string[],
  * }} answers
  * @returns {{
  *   score: number,
@@ -303,11 +252,9 @@ export function scoreCourseForReflectDetail(code, answers = {}) {
   const {
     interestRatings = {},
     styleRatings = {},
-    industries = [],
     topicsEnjoyed = [],
     skillsHave = [],
     skillsWant = [],
-    deliverables = [],
   } = answers;
   const clusters = interestKeysForCourse(code);
   const drivers = [];
@@ -405,13 +352,6 @@ export function scoreCourseForReflectDetail(code, answers = {}) {
     drivers.push(`programming confidence: ${programmingConfidence}/5 → upper-division penalty`);
   }
 
-  // Rule 8 — industry alignment bonus (capped, non-stacking)
-  const industry = industryMatchForCourse(code, industries);
-  if (industry.matched) {
-    adjustment += INDUSTRY_BONUS;
-    drivers.push(`industry fit: ${industry.labels.join(", ")} (+${INDUSTRY_BONUS})`);
-  }
-
   // Q19 — topic enjoyment bonus (flat, once per course if any topic maps)
   const topic = topicMatchForCourse(code, topicsEnjoyed);
   if (topic.matched) {
@@ -449,13 +389,6 @@ export function scoreCourseForReflectDetail(code, answers = {}) {
     );
   }
 
-  // Q22 — deliverable match bonus (once)
-  const deliverable = deliverableMatchForCourse(code, deliverables);
-  if (deliverable.matched) {
-    adjustment += DELIVERABLE_BONUS;
-    drivers.push(`deliverable fit: ${deliverable.labels.join(", ")} (+${DELIVERABLE_BONUS})`);
-  }
-
   // Rule 9 — clamp to 1–5, then expose the 0–100% display score
   const score = clamp(baseScore + adjustment, 1, 5);
   const matchPercent = matchPercentFromScore(score);
@@ -472,7 +405,7 @@ export function scoreCourseForReflectDetail(code, answers = {}) {
 /**
  * Weighted elective score from reflect answers (higher = better match).
  * @param {string} code
- * @param {{ interestRatings?: Record<string, number>, styleRatings?: Record<string, number>, industries?: string[] }} answers
+ * @param {{ interestRatings?: Record<string, number>, styleRatings?: Record<string, number> }} answers
  * @returns {number}
  */
 export function scoreCourseForReflect(code, answers = {}) {
@@ -579,12 +512,10 @@ export function inferCareerTarget(answers = {}) {
  * @param {string} creditLoad
  * @param {string} note
  * @param {string} [careerTarget]
- * @param {string[]} [industries]
  * @param {{
  *   topicsEnjoyed?: string[],
  *   skillsHave?: string[],
  *   skillsWant?: string[],
- *   deliverables?: string[],
  * }} [multiSelect]
  */
 export function buildReflectAnswers(
@@ -594,7 +525,6 @@ export function buildReflectAnswers(
   creditLoad,
   note,
   careerTarget,
-  industries = [],
   multiSelect = {}
 ) {
   return {
@@ -604,11 +534,9 @@ export function buildReflectAnswers(
     creditLoad,
     note: note?.trim() || "",
     careerTarget,
-    industries: [...industries],
     topicsEnjoyed: [...(multiSelect.topicsEnjoyed || [])],
     skillsHave: [...(multiSelect.skillsHave || [])],
     skillsWant: [...(multiSelect.skillsWant || [])],
-    deliverables: [...(multiSelect.deliverables || [])],
   };
 }
 
@@ -625,7 +553,7 @@ function isCompleteRating(value) {
 
 /**
  * Missing 1–5 ratings that recommendations need from Reflect.
- * Section C (topics/skills/deliverables) is optional.
+ * Section C (topics/skills) is optional.
  *
  * @param {Record<string, unknown>} [answers]
  * @returns {{ interest: string[], style: string[] }}
@@ -691,13 +619,6 @@ export function formatReflectAnswersForPrompt(answers = {}) {
   );
   if (styleBlock) lines.push(styleBlock);
 
-  if (Array.isArray(answers.industries) && answers.industries.length) {
-    const labels = answers.industries
-      .map((key) => INDUSTRY_OPTIONS.find((opt) => opt.key === key)?.label || key)
-      .join(", ");
-    lines.push(`Industries of interest: ${labels}`);
-  }
-
   if (Array.isArray(answers.topicsEnjoyed) && answers.topicsEnjoyed.length) {
     const labels = answers.topicsEnjoyed
       .map((key) => TOPIC_OPTIONS.find((opt) => opt.key === key)?.label || key)
@@ -717,13 +638,6 @@ export function formatReflectAnswersForPrompt(answers = {}) {
       .map((key) => SKILL_OPTIONS.find((opt) => opt.key === key)?.label || key)
       .join(", ");
     lines.push(`Skills to walk out with (up to 6): ${labels}`);
-  }
-
-  if (Array.isArray(answers.deliverables) && answers.deliverables.length) {
-    const labels = answers.deliverables
-      .map((key) => DELIVERABLE_OPTIONS.find((opt) => opt.key === key)?.label || key)
-      .join(", ");
-    lines.push(`Want to show an employer (up to 3): ${labels}`);
   }
 
   if (answers.note?.trim()) lines.push(`Additional note: ${answers.note.trim()}`);

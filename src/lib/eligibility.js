@@ -129,17 +129,3 @@ export function getEligibleCourses(catalog, record) {
     return checkEligibility(code, record).eligible;
   });
 }
-
-/**
- * @param {string[]} codes
- * @param {CatalogCourse[]} eligibleCatalog
- * @returns {string[]}
- */
-export function filterToEligibleCodes(codes, eligibleCatalog) {
-  const eligibleSet = new Set(
-    eligibleCatalog.map((c) => normalizeCode(`${c.subject} ${c.number}`))
-  );
-  return codes
-    .map((code) => normalizeCode(code))
-    .filter((code) => eligibleSet.has(code));
-}

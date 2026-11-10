@@ -5,8 +5,6 @@ import os from "node:os";
 import path from "node:path";
 import {
   buildFallbackRecommendations,
-  buildRecommendPrompt,
-  finalizeRecommendationsFromText,
   isBlockedFromRecommendation,
   markSyllabusGrounded,
   MIN_RECOMMENDATIONS,
@@ -15,7 +13,7 @@ import {
   recommendCourses,
   shortlistEligibleCourses,
 } from "./recommendCourses.js";
-import { filterToEligibleCodes, getEligibleCourses } from "../src/lib/eligibility.js";
+import { getEligibleCourses } from "../src/lib/eligibility.js";
 import { COURSES } from "../src/data/courseCatalog.js";
 import { buildStudentRecord } from "../src/lib/studentRecord.js";
 import { scoreCourseForReflect } from "../src/lib/reflectScoring.js";
@@ -69,16 +67,6 @@ const eligibleWithBlocked = [
   },
 ];
 
-describe("filterToEligibleCodes (recommend path)", () => {
-  it("drops course codes that are not in the eligible set", () => {
-    const filtered = filterToEligibleCodes(
-      ["ITCS 3153", "FAKE 9999", "ITIS 3200"],
-      eligible
-    );
-    assert.deepEqual(filtered, ["ITCS 3153", "ITIS 3200"]);
-  });
-});
-
 describe("recommendation blocklist", () => {
   it("marks required studio and support courses as blocked", () => {
     assert.equal(isBlockedFromRecommendation("DTSC 2301"), true);
@@ -99,123 +87,6 @@ describe("recommendation blocklist", () => {
     assert.ok(list.some((c) => `${c.subject} ${c.number}` === "ITCS 3153"));
   });
 
-  it("drops blocked codes even when the model returns them", () => {
-    const fakeGemini = JSON.stringify({
-      summary: "A mix of options.",
-      courses: [
-        { code: "DTSC 2301", reason: "Core studio." },
-        { code: "ITCS 3153", reason: "Matches your AI interest." },
-        { code: "ITSC 2214", reason: "Computing support." },
-      ],
-    });
-
-    const result = finalizeRecommendationsFromText(fakeGemini, eligibleWithBlocked, {
-      interestRatings: { ai: 5 },
-    });
-
-    assert.ok(result.recommendations.length >= MIN_RECOMMENDATIONS);
-    assert.equal(result.recommendations[0].code, "ITCS 3153");
-    assert.equal(result.recommendations[0].matchPercent, 100);
-    for (const rec of result.recommendations) {
-      assert.equal(isBlockedFromRecommendation(rec.code), false);
-    }
-  });
-});
-
-describe("finalizeRecommendationsFromText", () => {
-  it("drops invented course codes before returning recommendations", () => {
-    const fakeGemini = JSON.stringify({
-      summary: "A mix of solid options.",
-      courses: [
-        { code: "ITCS 3153", reason: "Matches your AI interest." },
-        { code: "FAKE 9999", reason: "Totally made up." },
-        { code: "ITIS 3200", reason: "Fits cybersecurity interest." },
-      ],
-    });
-
-    const result = finalizeRecommendationsFromText(fakeGemini, eligible);
-
-    assert.ok(result.recommendations.length >= MIN_RECOMMENDATIONS);
-    assert.ok(result.recommendations.some((r) => r.code === "ITCS 3153"));
-    assert.ok(result.recommendations.some((r) => r.code === "ITIS 3200"));
-    assert.ok(!result.recommendations.some((r) => r.code === "FAKE 9999"));
-  });
-
-  it("falls back to eligible courses when the model response is not valid JSON", () => {
-    const result = finalizeRecommendationsFromText(
-      "Sorry, here are some thoughts without JSON…",
-      eligible
-    );
-
-    assert.ok(Array.isArray(result.recommendations));
-    assert.ok(result.recommendations.length >= MIN_RECOMMENDATIONS);
-    assert.ok(result.recommendations.length <= 5);
-    assert.ok(typeof result.summary === "string" && result.summary.length > 0);
-    for (const rec of result.recommendations) {
-      assert.ok(eligible.some((c) => `${c.subject} ${c.number}` === rec.code));
-      assert.ok(typeof rec.reason === "string" && rec.reason.length > 0);
-      assert.equal(isBlockedFromRecommendation(rec.code), false);
-    }
-  });
-
-  it("pads to at least 3 recommendations when the model returns only one code", () => {
-    const fakeGemini = JSON.stringify({
-      summary: "One strong pick.",
-      courses: [{ code: "ITCS 3153", reason: "Matches your AI interest." }],
-    });
-
-    const result = finalizeRecommendationsFromText(fakeGemini, eligible, {
-      interestRatings: { ai: 5 },
-    });
-
-    assert.ok(result.recommendations.length >= MIN_RECOMMENDATIONS);
-    assert.equal(result.recommendations[0].code, "ITCS 3153");
-  });
-
-  it("falls back to ranked eligible courses when all model codes are filtered out", () => {
-    const fakeGemini = JSON.stringify({
-      summary: "",
-      courses: [
-        { code: "ZZZZ 0000", reason: "Nope." },
-        { code: "YYYY 1111", reason: "Also nope." },
-      ],
-    });
-
-    const result = finalizeRecommendationsFromText(fakeGemini, eligible);
-
-    assert.ok(result.recommendations.length >= MIN_RECOMMENDATIONS);
-    assert.equal(result.eligibleCount, eligible.length);
-    assert.ok(typeof result.summary === "string" && result.summary.length > 0);
-  });
-});
-
-describe("buildRecommendPrompt", () => {
-  it("includes registerTerm and creditLoad in the prompt string", () => {
-    const prompt = buildRecommendPrompt({
-      eligible: eligibleWithBlocked,
-      answers: {
-        registerTerm: "Fall 2026",
-        creditLoad: "12-15 credits",
-        interestRatings: { ai: 5 },
-        styleRatings: { mathComfort: 4 },
-      },
-    });
-
-    assert.match(prompt, /Fall 2026/);
-    assert.match(prompt, /12-15 credits/);
-    assert.match(prompt, /Registration term:/);
-    assert.match(prompt, /Target credit load:/);
-    assert.match(prompt, /artificial intelligence and machine learning/);
-    assert.match(prompt, /4\/5/);
-    assert.match(prompt, /ELIGIBLE_COURSES/);
-    assert.match(prompt, /matchScore/);
-    assert.match(prompt, /Do not invent, abbreviate, or guess/);
-    assert.match(prompt, /ITCS 3153/);
-    assert.doesNotMatch(prompt, /FAKE 9999/);
-    assert.doesNotMatch(prompt, /"code": "DTSC 2301"/);
-    assert.doesNotMatch(prompt, /"code": "STAT 2223"/);
-    assert.doesNotMatch(prompt, /"code": "ITSC 2214"/);
-  });
 });
 
 describe("recommendCourses", () => {

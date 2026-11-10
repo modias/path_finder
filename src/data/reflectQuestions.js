@@ -189,18 +189,6 @@ export const SKILL_OPTIONS = [
   { key: "systemsAdmin", label: "Systems administration" },
 ];
 
-/** Q22 — what you want to show an employer (pick up to 3). */
-export const DELIVERABLE_OPTIONS = [
-  { key: "liveApp", label: "An app or site that's actually live" },
-  { key: "modelAnalysis", label: "A model or analysis with real results" },
-  { key: "designCaseStudy", label: "A design case study" },
-  { key: "securityWriteup", label: "Security labs and CTF write-ups" },
-  { key: "dashboard", label: "A dashboard someone uses" },
-  { key: "researchPaper", label: "A paper, poster, or lab experience" },
-  { key: "physicalDevice", label: "A physical device I built" },
-  { key: "clientWork", label: "Work I did for a real client" },
-];
-
 /**
  * Skills each elective mainly teaches. `intro` = courses that teach the skill from scratch
  * (Q20 already-have nudges these down slightly; Q21 want bumps all listed courses).
@@ -335,61 +323,6 @@ export const SKILL_COURSE_TAGS = {
     intro: ["ITSC 3146"],
   },
 };
-
-/** Deliverable type → courses whose projects/outputs match (Q22 bump). */
-export const DELIVERABLE_COURSE_TAGS = {
-  liveApp: ["ITIS 3135", "ITIS 3310", "ITIS 3320", "ITIS 4166", "ITIS 4180", "ITCS 4155"],
-  modelAnalysis: ["ITCS 3153", "ITCS 3156", "ITCS 3162", "ITCS 4101", "STAT 3128", "STAT 3160"],
-  designCaseStudy: ["ITIS 3130", "ITIS 3140", "ITIS 4350", "ITIS 4353", "ITIS 4355", "ITIS 4360"],
-  securityWriteup: ["ITIS 3200", "ITIS 4221", "ITIS 4246", "ITIS 4250", "ITIS 4260", "ITIS 4261", "ITIS 4214"],
-  dashboard: ["ITCS 4121", "ITCS 4122", "ITCS 4123", "INFO 3236"],
-  researchPaper: ["ITSC 4990", "ITSC 4991", "DTSC 3900", "BINF 4900"],
-  physicalDevice: ["ITCS 4150", "ITCS 4151", "ITCS 4152"],
-  clientWork: ["ITIS 4390", "ITSC 4681", "ITSC 4682", "DTSC 4301", "DTSC 4302", "ITCS 4238"],
-};
-
-/**
- * Industry / sector picks (multi-select). Used for a small alignment bonus, not a filter.
- * `clusters` maps to Group 1 specialty keys and/or department prefixes.
- */
-export const INDUSTRY_OPTIONS = [
-  {
-    key: "healthcare",
-    label: "Healthcare / biotech",
-    clusters: ["bioinformatics"],
-    prefixes: ["BINF"],
-  },
-  {
-    key: "govSecurity",
-    label: "Government / defense / security",
-    clusters: ["cybersecurity"],
-  },
-  {
-    key: "gaming",
-    label: "Gaming",
-    clusters: ["games"],
-  },
-  {
-    key: "finance",
-    label: "Finance / fintech",
-    clusters: ["dataViz", "ai"],
-  },
-  {
-    key: "techProduct",
-    label: "Tech product / SaaS",
-    clusters: ["webMobile", "hci", "cloudSystems"],
-  },
-  {
-    key: "sports",
-    label: "Sports / performance",
-    clusters: ["sportsAnalytics"],
-  },
-  {
-    key: "roboticsHardware",
-    label: "Robotics / hardware",
-    clusters: ["robotics"],
-  },
-];
 
 /** Maps Group 1 keys to elective course clusters (weights, not filters). */
 export const INTEREST_ELECTIVE_CLUSTERS = {

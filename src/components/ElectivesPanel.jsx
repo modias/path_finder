@@ -11,6 +11,8 @@ import { normalizeCode } from "../data/prerequisites";
 
 const INK = "#0B2E22";
 const GOLD_DEEP = "#8C7F4B";
+const GOLD_BG = "#F8F4E6";
+const DOT_COUNT = 5;
 const GREEN = "#1F7A54";
 const SURFACE = "#FFFFFF";
 const MUTED = "#5B6660";
@@ -25,13 +27,16 @@ function matchColors(percent) {
   return { bg: "#F5F6F1", color: MUTED };
 }
 
-function ElectiveCard({ course, onRefresh, showRefresh }) {
+function ElectiveCard({ course, onRefresh, showRefresh, seenCount = 1 }) {
+  const activeDot = (seenCount - 1) % DOT_COUNT;
+  const cycleLength = activeDot + 1;
   const statusMeta = {
     in_progress: { label: "In progress", bg: "#FFF8E8", color: "#C47A20" },
     remaining: { label: "Still needed", bg: "#F5F6F1", color: MUTED },
   }[course.status];
   const percent = Number.isFinite(course.matchPercent) ? course.matchPercent : null;
   const matchStyle = percent != null ? matchColors(percent) : { bg: "#F5F6F1", color: MUTED };
+  const [showOrigin, setShowOrigin] = useState(false);
 
   return (
     <div
@@ -85,6 +90,53 @@ function ElectiveCard({ course, onRefresh, showRefresh }) {
           <RefreshCw size={11} /> Show other electives
         </button>
       )}
+      <button
+        type="button"
+        onClick={() => setShowOrigin((open) => !open)}
+        aria-expanded={showOrigin}
+        aria-label={showOrigin ? "Hide why this was suggested" : "Show why this was suggested"}
+        className="mt-2.5 px-1 py-1 flex items-center gap-1.5 transition-opacity hover:opacity-80"
+      >
+        {Array.from({ length: DOT_COUNT }, (_, index) => {
+          const active = index === activeDot;
+          const seen = index < cycleLength;
+          const isOrigin = index === 0 && seenCount <= DOT_COUNT;
+          const background = !seen ? SURFACE : isOrigin ? GOLD_DEEP : GREEN;
+          return (
+            <span
+              key={index}
+              className="block rounded-full transition-all"
+              style={{
+                width: active ? 7 : 5,
+                height: active ? 7 : 5,
+                background,
+                border: seen ? "none" : "1px solid #C9CDC2",
+              }}
+            />
+          );
+        })}
+      </button>
+      {showOrigin && (
+        <div
+          className="mt-2 rounded-lg px-3 py-2 text-[11px] leading-relaxed"
+          style={{ background: GOLD_BG, border: `1px solid ${GOLD_DEEP}55`, color: GOLD_DEEP }}
+        >
+          <p className="font-semibold mb-1">Why this was suggested</p>
+          {course.drivers?.length ? (
+            <ul className="list-disc pl-4 space-y-0.5">
+              {course.drivers.map((driver) => (
+                <li key={driver}>{driver}</li>
+              ))}
+            </ul>
+          ) : (
+            <p>No Reflect answers moved this score; it&apos;s ranked on default fit.</p>
+          )}
+          <p className="mt-1.5 opacity-80">
+            Description from{" "}
+            {course.descriptionSource === "syllabus" ? "the course syllabus" : "the catalog"}.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -103,17 +155,18 @@ export default function ElectivesPanel({ reflectAnswers = {}, recommendations = 
     buildInitialElectiveCodes(reflectAnswers)
   );
   const [retiredCodes, setRetiredCodes] = useState([]);
+  const [slotSeenCounts, setSlotSeenCounts] = useState([]);
   const answerKey = JSON.stringify({
     interestRatings: reflectAnswers.interestRatings || {},
     styleRatings: reflectAnswers.styleRatings || {},
     topicsEnjoyed: reflectAnswers.topicsEnjoyed || [],
     skillsWant: reflectAnswers.skillsWant || [],
-    deliverables: reflectAnswers.deliverables || [],
   });
 
   useEffect(() => {
     setDisplayedCodes(buildInitialElectiveCodes(reflectAnswers));
     setRetiredCodes([]);
+    setSlotSeenCounts([]);
   }, [answerKey]); // eslint-disable-line react-hooks/exhaustive-deps -- answerKey is the stable snapshot
 
   const orderedElectives = useMemo(() => {
@@ -148,6 +201,13 @@ export default function ElectivesPanel({ reflectAnswers = {}, recommendations = 
     if (!result?.course) return;
     const replacing = normalizeCode(code);
     const nextCode = result.course.code;
+    const slot = displayedCodes.findIndex((current) => normalizeCode(current) === replacing);
+
+    if (slot !== -1) {
+      const nextCounts = [...slotSeenCounts];
+      nextCounts[slot] = (nextCounts[slot] ?? 1) + 1;
+      setSlotSeenCounts(nextCounts);
+    }
 
     setDisplayedCodes(
       displayedCodes.map((current) => (normalizeCode(current) === replacing ? nextCode : current))
@@ -178,6 +238,11 @@ export default function ElectivesPanel({ reflectAnswers = {}, recommendations = 
           <ElectiveCard
             key={course.code}
             course={course}
+            seenCount={
+              slotSeenCounts[
+                displayedCodes.findIndex((current) => normalizeCode(current) === course.code)
+              ]
+            }
             showRefresh={replacements.has(course.code)}
             onRefresh={() => handleRefresh(course.code)}
           />

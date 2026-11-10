@@ -88,19 +88,6 @@ describe("scoreCourseForReflect", () => {
     assert.ok(productOriented > researchOriented);
   });
 
-  it("adds a capped industry alignment bonus", () => {
-    const withIndustry = scoreCourseForReflectDetail("ITIS 3200", {
-      interestRatings: { cybersecurity: 4 },
-      industries: ["govSecurity", "gaming"],
-    });
-    const without = scoreCourseForReflectDetail("ITIS 3200", {
-      interestRatings: { cybersecurity: 4 },
-      industries: [],
-    });
-    assert.equal(Number((withIndustry.score - without.score).toFixed(2)), 0.3);
-    assert.ok(withIndustry.drivers.some((d) => /industry fit/i.test(d)));
-  });
-
   it("adds a topic enjoyment bonus when Q19 maps to the course cluster", () => {
     const withTopic = scoreCourseForReflectDetail("ITCS 3153", {
       interestRatings: { ai: 4 },
@@ -144,22 +131,10 @@ describe("scoreCourseForReflect", () => {
     assert.equal(have.score, plain.score);
   });
 
-  it("adds a deliverable match bonus (Q22)", () => {
-    const withDeliverable = scoreCourseForReflectDetail("ITCS 4123", {
-      deliverables: ["dashboard", "liveApp"],
-    });
-    const without = scoreCourseForReflectDetail("ITCS 4123", {
-      deliverables: [],
-    });
-    assert.equal(Number((withDeliverable.score - without.score).toFixed(2)), 0.35);
-    assert.ok(withDeliverable.drivers.some((d) => /deliverable fit/i.test(d)));
-  });
-
   it("clamps the final score between 1 and 5", () => {
     const high = scoreCourseForReflect("ITCS 3156", {
       interestRatings: { ai: 5 },
       styleRatings: { mathComfort: 5, handsOnVsTheory: 1 },
-      industries: ["finance"],
     });
     assert.ok(high <= 5);
     assert.ok(high >= 1);
@@ -272,13 +247,12 @@ describe("inferCareerTarget", () => {
 });
 
 describe("formatReflectAnswersForPrompt", () => {
-  it("includes specialty, style, and industry answers in the prompt text", () => {
+  it("includes specialty and style answers in the prompt text", () => {
     const text = formatReflectAnswersForPrompt({
       registerTerm: "Fall 2026",
       creditLoad: "15 (standard)",
       interestRatings: { ai: 4 },
       styleRatings: { mathComfort: 3 },
-      industries: ["healthcare"],
       note: "Interested in internships.",
       careerTarget: "Data scientist",
     });
@@ -288,24 +262,21 @@ describe("formatReflectAnswersForPrompt", () => {
     assert.match(text, /artificial intelligence and machine learning/);
     assert.match(text, /4\/5/);
     assert.match(text, /math and statistics/);
-    assert.match(text, /Healthcare \/ biotech/);
     assert.match(text, /Interested in internships/);
     assert.match(text, /Data scientist/);
   });
 
-  it("includes Q19–Q22 multi-select answers in the prompt text", () => {
+  it("includes Q19–Q21 multi-select answers in the prompt text", () => {
     const text = formatReflectAnswersForPrompt({
       topicsEnjoyed: ["aiAutomation"],
       skillsHave: ["security"],
       skillsWant: ["mlAi", "dataViz"],
-      deliverables: ["dashboard"],
     });
 
     assert.match(text, /AI & automation/);
     assert.match(text, /Security/);
     assert.match(text, /Machine learning & AI/);
     assert.match(text, /Data visualization/);
-    assert.match(text, /dashboard someone uses/i);
   });
 });
 

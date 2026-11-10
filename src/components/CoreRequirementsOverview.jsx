@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
-import { BarChart3, Database, Globe, LineChart, Lightbulb, Sparkles } from "lucide-react";
+import { BarChart3, Check, Database, Globe, LineChart, Lightbulb, Sparkles } from "lucide-react";
 import { COURSES, CORE_REQUIREMENT_GROUPS, ELECTIVE_PATHWAYS } from "../data/courseCatalog";
+import {
+  GOOD_OPTION_PERCENT,
+  STRONG_MATCH_PERCENT,
+  scoreCourseForReflectDetail,
+  validateReflectAnswersForRecommendations,
+} from "../lib/reflectScoring";
 import CourseAdvisor from "./CourseAdvisor";
 
 const INK = "#1B3A2D";
@@ -11,6 +17,7 @@ const LABEL_BG = "#E6ECE6";
 const CARD_BORDER = "#E4E1D4";
 const MUTED = "#5B6660";
 const PATHWAY_BG = "#1E4535";
+const PATHWAY_BG_ACTIVE = "#2A5A45";
 
 const PATHWAY_ICONS = {
   ai_ml: Lightbulb,
@@ -25,6 +32,27 @@ const RECOMMENDATIONS_ID = "course_recommendations";
 const COURSE_BY_CODE = Object.fromEntries(
   COURSES.map((c) => [`${c.subject} ${c.number}`, c])
 );
+
+/**
+ * @param {number} percent
+ * @returns {{ bg: string, color: string }}
+ */
+function courseMatchColors(percent) {
+  if (percent >= STRONG_MATCH_PERCENT) return { bg: "#E8F5EE", color: "#1F7A54" };
+  if (percent >= GOOD_OPTION_PERCENT) return { bg: "#F3EED9", color: "#8C7F4B" };
+  return { bg: "#F5F6F1", color: MUTED };
+}
+
+function SelectedTag({ color, bg }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full"
+      style={{ background: bg, color }}
+    >
+      <Check size={10} strokeWidth={3} /> Selected
+    </span>
+  );
+}
 
 function SectionHeading({ children }) {
   return (
@@ -44,6 +72,7 @@ function SectionHeading({ children }) {
  * }} props
  */
 export default function CoreRequirementsOverview({
+  reflectAnswers = {},
   recommendations = [],
   recommendLoading = false,
   recommendError = null,
@@ -60,6 +89,17 @@ export default function CoreRequirementsOverview({
     () => (pathway ? pathway.electives.map((code) => COURSE_BY_CODE[code]).filter(Boolean) : []),
     [pathway]
   );
+
+  const reflectComplete = !validateReflectAnswersForRecommendations(reflectAnswers);
+  const courseMatches = useMemo(() => {
+    if (!reflectComplete || !pathway) return {};
+    return Object.fromEntries(
+      pathway.electives.map((code) => {
+        const detail = scoreCourseForReflectDetail(code, reflectAnswers);
+        return [code, { percent: detail.matchPercent, label: detail.label }];
+      })
+    );
+  }, [reflectComplete, reflectAnswers, pathway]);
 
   return (
     <div className="rounded-2xl p-5 sm:p-7 mb-8" style={{ background: PANEL_BG }}>
@@ -115,14 +155,24 @@ export default function CoreRequirementsOverview({
               type="button"
               onClick={() => setActivePathway((prev) => (prev === p.id ? "" : p.id))}
               aria-expanded={active}
-              className="flex flex-col justify-start min-w-0 text-left rounded-xl p-3.5 transition-opacity hover:opacity-95"
-              style={{ background: PATHWAY_BG, border: `1.5px solid ${active ? GOLD : "transparent"}` }}
+              aria-pressed={active}
+              className="flex flex-col justify-start min-w-0 text-left rounded-xl p-3.5 transition-all hover:opacity-95"
+              style={{
+                background: active ? PATHWAY_BG_ACTIVE : PATHWAY_BG,
+                border: `2px solid ${active ? GOLD : "transparent"}`,
+                boxShadow: active ? `0 0 0 3px ${GOLD}55` : "none",
+              }}
             >
               <div className="flex items-start gap-2 mb-2">
                 <Icon size={15} color={GOLD} className="shrink-0 mt-0.5" />
                 <h4 className="min-w-0 break-words text-[15px] font-semibold leading-tight" style={{ color: "#FFFFFF" }}>{p.label}</h4>
               </div>
               <p className="text-[13px] leading-snug" style={{ color: "#D7E4DC" }}>{p.blurb}</p>
+              {active && (
+                <div className="mt-2.5">
+                  <SelectedTag bg={GOLD} color={INK} />
+                </div>
+              )}
             </button>
           );
         })}
@@ -132,8 +182,13 @@ export default function CoreRequirementsOverview({
             setActivePathway((prev) => (prev === RECOMMENDATIONS_ID ? "" : RECOMMENDATIONS_ID))
           }
           aria-expanded={showRecommendations}
-          className="flex flex-col justify-start min-w-0 text-left rounded-xl p-3.5 transition-opacity hover:opacity-95"
-          style={{ background: GOLD, border: `1.5px solid ${showRecommendations ? INK : "transparent"}` }}
+          aria-pressed={showRecommendations}
+          className="flex flex-col justify-start min-w-0 text-left rounded-xl p-3.5 transition-all hover:opacity-95"
+          style={{
+            background: GOLD,
+            border: `2px solid ${showRecommendations ? INK : "transparent"}`,
+            boxShadow: showRecommendations ? `0 0 0 3px ${INK}33` : "none",
+          }}
         >
           <div className="flex items-start gap-2 mb-2">
             <Sparkles size={15} color={INK} className="shrink-0 mt-0.5" />
@@ -146,6 +201,11 @@ export default function CoreRequirementsOverview({
               ? `${recommendations.length} eligible picks matched to your Reflect answers`
               : "Personalized, eligible picks from your Reflect answers"}
           </p>
+          {showRecommendations && (
+            <div className="mt-2.5">
+              <SelectedTag bg={INK} color="#FFFFFF" />
+            </div>
+          )}
         </button>
       </div>
 
@@ -186,16 +246,30 @@ export default function CoreRequirementsOverview({
             <h3 className="text-sm font-semibold" style={{ color: INK }}>{pathway.label} electives</h3>
           </div>
           <ul className="divide-y divide-[#E4E1D4]">
-            {pathwayCourses.map((course) => (
-              <li key={`${course.subject}-${course.number}`} className="px-5 py-3">
-                <p className="text-sm font-semibold" style={{ color: INK }}>
-                  <span style={{ fontFamily: "ui-monospace, monospace" }}>{course.subject} {course.number}</span>
-                  {" · "}
-                  {course.title}
-                </p>
-                {course.blurb && <p className="text-xs mt-0.5" style={{ color: MUTED }}>{course.blurb}</p>}
-              </li>
-            ))}
+            {pathwayCourses.map((course) => {
+              const match = courseMatches[`${course.subject} ${course.number}`];
+              const matchStyle = match ? courseMatchColors(match.percent) : null;
+              return (
+                <li key={`${course.subject}-${course.number}`} className="px-5 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-semibold min-w-0" style={{ color: INK }}>
+                      <span style={{ fontFamily: "ui-monospace, monospace" }}>{course.subject} {course.number}</span>
+                      {" · "}
+                      {course.title}
+                    </p>
+                    {matchStyle && (
+                      <span
+                        className="shrink-0 text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full font-semibold"
+                        style={{ background: matchStyle.bg, color: matchStyle.color }}
+                      >
+                        {match.percent}% · {match.label}
+                      </span>
+                    )}
+                  </div>
+                  {course.blurb && <p className="text-xs mt-0.5" style={{ color: MUTED }}>{course.blurb}</p>}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
